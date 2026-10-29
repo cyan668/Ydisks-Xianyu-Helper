@@ -49,6 +49,32 @@ export function ensureCI(api, repository, branch, sha) {
   return 'dispatched';
 }
 
+/** 官方更改工作流时保留人工授权边界；同版本只创建一个提醒，不存长期高权限令牌。 */
+export function requestWorkflowReview(api, repository, tag, base, paths) {
+  const marker = `<!-- upstream-workflow-review:${tag} -->`;
+  let issue;
+  // 分页查找自己的标记，避免仓库已有较多 Issue 时重复创建提醒。
+  for (let page = 1; ; page++) {
+    const entries = api(`repos/${repository}/issues?state=all&per_page=100&page=${page}`);
+    issue = entries.find(entry => !entry.pull_request && entry.body?.includes(marker));
+    if (issue || entries.length < 100) break;
+  }
+  if (!issue) {
+    issue = api(`repos/${repository}/issues`, 'POST', {
+      title: `[上游同步需审核工作流] ${tag}`,
+      body: [marker,
+        `官方正式版 [${tag}](https://github.com/${upstream}/releases/tag/${tag}) 修改了 GitHub 工作流：`,
+        paths.map(path => `- \`${path}\``).join('\n'),
+        '当前同步使用短期 GITHUB_TOKEN，不能自行获取 workflows 权限。未推送升级分支、未丢弃工作流文件、未更新默认分支或线上服务。',
+        `请按 [定制维护说明](https://github.com/${repository}/blob/${base}/CUSTOMIZATION.md#官方修改了工作流时) 在已授权的本地 Git 环境合并完整版本并提出 PR。`,
+        `候选分支名：\`codex/upstream-${tag}\`；基线：\`${base}\`。`,
+        '检查新增工作流是否会发布镜像或部署；准备好候选后再运行同步工作流，它会复用该分支并调度 CI。关闭本提醒表示已知悉，不会每天重复创建。',
+      ].join('\n\n'),
+    });
+  }
+  return { status: 'workflow-review-required', tag, issue: issue.html_url, workflowPaths: paths };
+}
+
 /**
  * 从官方正式版建立合并候选及 PR，永不推送默认分支、强推、合并 PR 或部署。
  * api/git 可注入本地替身；repoURL 仅供真实临时 Git 仓库测试替换，生产固定为官方地址。
@@ -93,6 +119,11 @@ export function synchronize({ repository, base = 'codex/custom', dryRun = false,
 
   let conflicts = [];
   const remoteBranch = git(['ls-remote', '--heads', 'origin', `refs/heads/${branch}`]).out;
+  if (!remoteBranch && !existing) {
+    const commonSHA = git(['merge-base', baseSHA, releaseSHA]).out;
+    const workflowPaths = git(['diff', '--name-only', commonSHA, releaseSHA, '--', '.github/workflows']).out.split('\n').filter(Boolean);
+    if (workflowPaths.length) return requestWorkflowReview(api, repository, tag, base, workflowPaths);
+  }
   git(['config', 'user.name', 'github-actions[bot]']);
   git(['config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com']);
   if (remoteBranch) {
@@ -158,7 +189,7 @@ function main() {
     base: process.env.SYNC_BASE_BRANCH || 'codex/custom', dryRun: process.env.SYNC_DRY_RUN === 'true' });
   console.log(JSON.stringify(result, null, 2));
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY,
-    `## 官方正式版同步\n\n状态：**${result.status}**\n\n版本：${result.tag}\n\n${result.pullRequest ? `[查看更新 PR](${result.pullRequest})` : '没有改动默认分支或线上服务。'}\n\n${result.conflicts?.length ? '冲突文件：\n' + result.conflicts.map(path => `- \`${path}\``).join('\n') : ''}\n`);
+    `## 官方正式版同步\n\n状态：**${result.status}**\n\n版本：${result.tag}\n\n${result.pullRequest ? `[查看更新 PR](${result.pullRequest})` : result.issue ? `[查看工作流审核提醒](${result.issue})` : '没有改动默认分支或线上服务。'}\n\n${result.conflicts?.length ? '冲突文件：\n' + result.conflicts.map(path => `- \`${path}\``).join('\n') : ''}\n`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -3,10 +3,10 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { command, ensureCI, stableTag, synchronize, upstream } from './upstream-sync.mjs';
+import { command, ensureCI, requestWorkflowReview, stableTag, synchronize, upstream } from './upstream-sync.mjs';
 
 /** 在操作系统临时目录建立独立 Git 夹具；不接触真实 GitHub 仓库。 */
-function fixture({ conflict = false, ahead = true } = {}) {
+function fixture({ conflict = false, ahead = true, workflowChange = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'ydisks-sync-test-'));
   const source = join(root, 'official');
   const origin = join(root, 'fork.git');
@@ -35,6 +35,10 @@ function fixture({ conflict = false, ahead = true } = {}) {
   run(checkout, ['push', 'origin', 'codex/custom']);
   if (ahead) {
     writeFileSync(join(source, conflict ? 'shared.txt' : 'upstream.txt'), 'official update\n');
+    if (workflowChange) {
+      mkdirSync(join(source, '.github', 'workflows'), { recursive: true });
+      writeFileSync(join(source, '.github', 'workflows', 'ci.yml'), 'name: changed workflow\n');
+    }
     run(source, ['add', '.']);
     run(source, ['commit', '-m', '官方更新']);
     run(source, ['tag', 'v1.0.1']);
@@ -45,12 +49,18 @@ function fixture({ conflict = false, ahead = true } = {}) {
   const repository = 'fixture/fork';
   const pull = { number: 1, state: 'open', html_url: 'https://github.com/fixture/fork/pull/1' };
   let existingPull = null;
+  let existingIssue = null;
   const dispatchedSHAs = [];
   const api = (path, method = 'GET', body) => {
     calls.push({ path, method, body });
     if (path === `repos/${repository}`) return { fork: true, parent: { full_name: upstream }, default_branch: 'codex/custom' };
     if (path === `repos/${upstream}/releases/latest`) return { tag_name: tag, draft: false, prerelease: false };
     if (path.includes('/pulls?')) return existingPull ? [existingPull] : [];
+    if (path.includes('/issues?')) return existingIssue ? [existingIssue] : [];
+    if (path.endsWith('/issues') && method === 'POST') {
+      existingIssue = { ...body, html_url: 'https://github.com/fixture/fork/issues/2' };
+      return existingIssue;
+    }
     if (path.endsWith('/pulls') && method === 'POST') {
       existingPull = { ...pull, draft: body.draft };
       return existingPull;
@@ -191,4 +201,23 @@ test('已有CI不重复调度，缺少时才创建dispatch', () => {
   assert.equal(calls.length, 1);
   assert.equal(ensureCI(api, 'owner/repo', 'codex/upstream-v1.0.1', 'def'), 'dispatched');
   assert.equal(calls.at(-1).method, 'POST');
+});
+
+test('上游工作流变更只建一次提醒，不推分支或静默丢弃工作流', () => {
+  const f = fixture({ workflowChange: true });
+  const first = synchronize(f.options);
+  assert.equal(first.status, 'workflow-review-required');
+  assert.deepEqual(first.workflowPaths, ['.github/workflows/ci.yml']);
+  assert.equal(synchronize(f.options).issue, first.issue);
+  assert.equal(f.calls.filter(c => c.method === 'POST').length, 1);
+  assert.equal(f.run(f.checkout, ['ls-remote', '--heads', 'origin', 'refs/heads/codex/upstream-*']).out, '');
+});
+
+test('工作流提醒跨页查找，已关闭提醒也不重复创建', () => {
+  const api = (path, method = 'GET') => {
+    assert.equal(method, 'GET');
+    return path.endsWith('page=1') ? Array.from({ length: 100 }, () => ({ body: 'unrelated' }))
+      : [{ state: 'closed', body: '<!-- upstream-workflow-review:v1.2.3 -->', html_url: 'existing-issue' }];
+  };
+  assert.equal(requestWorkflowReview(api, 'owner/repo', 'v1.2.3', 'codex/custom', ['ci.yml']).issue, 'existing-issue');
 });
