@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"xianyu-go/internal/deliveryquantity"
 	"xianyu-go/internal/money"
 )
 
@@ -540,6 +541,12 @@ func (s *RuleService) normalizeDraftActions(ctx context.Context, userID int64, t
 		}
 		if !isJSONObject(draftAction.ConfigJSON) {
 			return nil, flags, errors.New("动作配置必须是 JSON 对象")
+		}
+		if draftAction.ActionType == ActionSendCard || draftAction.ActionType == ActionSendTemplate {
+			// modeErr 在持久化前校验显式数量策略；不改写缺省配置，保留旧调用方行为。
+			if _, modeErr := deliveryquantity.Parse(draftAction.ConfigJSON); modeErr != nil {
+				return nil, flags, modeErr
+			}
 		}
 		if draftAction.ActionType == ActionSendTemplate {
 			// 进入此处前已通过 isJSONObject 校验，配置来源可编码 JSON，因此不会产生写入错误。

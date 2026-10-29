@@ -77,7 +77,10 @@ const TemplateVariantEditor: React.FC<TemplateVariantEditorProps> = ({ index, va
                 ariaLabel={`${key} 卡密库存`}
                 className="ios-input min-w-0 w-full px-2 py-2 rounded-lg text-xs"
               />
-              <input type="number" min="1" value={binding?.delivery_count || 1} onChange={/* callback 更新变量取货数量。 */ event => updateVariant(index, { template_bindings: (variant.template_bindings || []).map(/* bindingCandidate 是待处理的变量绑定。 */ bindingCandidate => bindingCandidate.variable_key === key ? { ...bindingCandidate, delivery_count: Math.max(1, Number(event.target.value) || 1) } : bindingCandidate) })} className="ios-input px-2 py-2 rounded-lg text-xs" aria-label={`${key} 每件份数`} />
+              <label className="text-xs text-sky-800">
+                {variant.quantity_mode === 'per_order' ? '每单份数' : '每件份数'}
+                <input type="number" min="1" value={binding?.delivery_count || 1} onChange={/* callback 更新变量取货数量，按所属动作策略计量。 */ event => updateVariant(index, { template_bindings: (variant.template_bindings || []).map(/* bindingCandidate 是待处理的变量绑定。 */ bindingCandidate => bindingCandidate.variable_key === key ? { ...bindingCandidate, delivery_count: Math.max(1, Number(event.target.value) || 1) } : bindingCandidate) })} className="ios-input w-full px-2 py-2 rounded-lg text-xs" aria-label={`${key} ${variant.quantity_mode === 'per_order' ? '每单份数' : '每件份数'}`} />
+              </label>
             </div>
           );
         })}

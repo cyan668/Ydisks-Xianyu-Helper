@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"xianyu-go/internal/db"
+	"xianyu-go/internal/deliveryquantity"
 )
 
 // deliveryReplayPlan 校验 run 的加密内容数量与原始任务计划；返回可安全补齐的单个直接卡密动作。
@@ -38,8 +39,17 @@ func deliveryReplayPlan(run *db.AutomationRun) (db.AutomationAction, error) {
 			continue
 		}
 		deliveryActions++
+		// modeErr 防止损坏的历史策略被现行规则或缺省值替代，模板消息数仍按原有凭证计量。
+		if _, modeErr := deliveryquantity.Parse(action.ConfigJSON); modeErr != nil {
+			return db.AutomationAction{}, fmt.Errorf("原始发货数量策略无效，请先人工核对: %w", modeErr)
+		}
 		if action.ActionType == ActionSendCard {
-			plannedUnits += deliverySendCount(original, action)
+			// units、countErr 只从原始动作快照计算剩余发货义务。
+			units, countErr := deliverySendCount(original, action)
+			if countErr != nil {
+				return db.AutomationAction{}, countErr
+			}
+			plannedUnits += units
 			refillAction = action
 		} else {
 			plannedUnits += len(action.TemplateMessages)

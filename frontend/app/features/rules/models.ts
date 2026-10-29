@@ -279,6 +279,9 @@ export interface AutomationAction {
   custom_variables?: Record<string, string>;
 }
 
+/** DeliveryQuantityMode 表示每个库存动作的份数计量，缺省维持按购买数量。 */
+export type DeliveryQuantityMode = 'per_item' | 'per_order';
+
 /** 由当前 feature adapter 归一后的 ShippingVariant UI 模型；不直接暴露 HTTP DTO。 */
 export interface ShippingVariant {
   /** 规格变体标识。 */
@@ -295,6 +298,10 @@ export interface ShippingVariant {
   card_type?: Card['type'];
   /** 变体发放数量。 */
   delivery_count: number;
+  /** 数量策略：按购买件数乘配置份数，或按整单固定配置份数。 */
+  quantity_mode?: DeliveryQuantityMode;
+  /** 原动作配置解析失败时的提示；保留原 JSON，禁止误显示或默存为按件。 */
+  quantity_mode_error?: string;
   /** 变体是否启用。 */
   enabled: boolean;
   /** 是否覆盖动作级延迟。 */

@@ -26,6 +26,7 @@ import Toast from '../components/Toast';
 import AllItemsConfirmation from '../components/AllItemsConfirmation';
 import { AutomationIssuePanel } from '../components/AutomationIssuePanel';
 import TemplateVariantEditor from '../components/TemplateVariantEditor';
+import DeliveryQuantityEditor from '../components/DeliveryQuantityEditor';
 import ReplyRuleEditor from '../components/ReplyRuleEditor';
 import ItemGreetingPanel from '../components/ItemGreetingPanel';
 import SearchableSelect from '../../../../shared/ui/SearchableSelect';
@@ -811,7 +812,7 @@ const Rules: React.FC<RulesProps> = ({ initialDeliveryTarget, onDeliveryTargetHa
                           <span className={`px-3 py-1.5 rounded-lg text-xs font-bold ${isMultiSpecRule ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
                             {isMultiSpecRule ? '多规格商品' : '普通商品'}
                           </span>
-                          <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700">按订单购买数量自动发货</span>
+                          <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700">数量按各发货内容的策略计算</span>
                         </div>
                         <p className="text-xs leading-5 text-gray-500">
                           多规格状态来自闲鱼商品本身，发布后不能在这里修改；系统会在买家付款后读取订单详情，按实际购买规格和数量匹配下面的发货规则。
@@ -944,17 +945,7 @@ const Rules: React.FC<RulesProps> = ({ initialDeliveryTarget, onDeliveryTargetHa
 
                               </div>
                             )}
-                            <div>
-                              <label className="block text-xs font-bold text-gray-600 mb-2">每件份数</label>
-                              <input
-                                type="number"
-                                min="1"
-                                max="100"
-                                value={variant.delivery_count}
-                                onChange={/* 当前回调处理用户交互或异步状态变化。 */ event => updateVariant(index, { delivery_count: Math.max(1, Number(event.target.value) || 1) })}
-                                className="w-full ios-input px-3 py-2.5 rounded-lg"
-                              />
-                            </div>
+                            <DeliveryQuantityEditor index={index} variant={variant} updateVariant={updateVariant} />
                             <div className="md:col-span-full flex flex-wrap items-center gap-3 rounded-xl bg-gray-50 px-3 py-2">
                               <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer">
                                 <input

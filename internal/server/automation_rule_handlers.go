@@ -172,7 +172,8 @@ func automationRulesJSON(rules []automationapp.Rule) []automationRuleResponse {
 				DeliveryCount: action.DeliveryCount, MessageTemplate: action.MessageTemplate,
 				DelaySeconds: action.DelaySeconds, ConfigJSON: action.ConfigJSON, Enabled: action.Enabled,
 				SortOrder: action.SortOrder, DeliveryTemplateID: action.DeliveryTemplateID,
-				DeliveryTemplateName: action.DeliveryTemplateName, TemplateKeys: append([]string(nil), action.TemplateKeys...),
+				// 无模板的卡券动作也输出空数组，遵守列表契约而非返回 null。
+				DeliveryTemplateName: action.DeliveryTemplateName, TemplateKeys: append([]string{}, action.TemplateKeys...),
 				TemplateBindings: automationTemplateBindingResponses(action.TemplateBindings), CustomVariables: copyAutomationCustomVariables(action.CustomVariables),
 			})
 		}

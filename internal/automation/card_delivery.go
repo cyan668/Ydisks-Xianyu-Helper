@@ -9,7 +9,7 @@ import (
 	"xianyu-go/internal/db"
 )
 
-// sendCard 按规格和购买数量分配文本、图片或数据卡密。
+// sendCard 按规格和动作数量策略分配文本、图片或数据卡密，缺省仍乘购买数量。
 func (e *automationActionExecutor) sendCard(ctx context.Context, task Task, action db.AutomationAction) (int, error) {
 	// result 保存卡密动作的发送数量和短暂凭证；旧入口只返回数量以保持测试及兼容调用方稳定。
 	result, err := e.sendCardWithProof(ctx, task, action)
@@ -24,8 +24,11 @@ func (e *automationActionExecutor) sendCardWithProof(ctx context.Context, task T
 	if action.CardID <= 0 {
 		return actionExecutionResult{}, fmt.Errorf("发送卡密动作缺少卡密组ID")
 	}
-	// count 是当前订单需要发送的卡密数量。
-	count := deliverySendCount(task, action)
+	// count、countErr 在读取库存或调用取卡 API 前核验快照中的数量策略。
+	count, countErr := deliverySendCount(task, action)
+	if countErr != nil {
+		return actionExecutionResult{}, noRetryAction(countErr)
+	}
 	// card 是待发送的卡密组完整配置。
 	card, err := e.store.Cards.GetForDelivery(ctx, action.CardID)
 	if err != nil {

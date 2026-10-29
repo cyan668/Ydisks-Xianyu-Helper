@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"xianyu-go/internal/db"
+	"xianyu-go/internal/deliveryquantity"
 	"xianyu-go/internal/deliverytemplate"
 )
 
@@ -16,7 +17,7 @@ type templateBindingCard struct {
 	binding db.DeliveryTemplateBinding
 	// card 保存经过发货权限校验的完整卡密组。
 	card *db.CardFull
-	// count 保存按订单购买数量折算后的发货份数。
+	// count 保存按动作的按件或按单策略折算后的绑定发货份数。
 	count int
 }
 
@@ -127,6 +128,10 @@ func (e *automationActionExecutor) sendTemplate(ctx context.Context, task Task, 
 
 // prepareTemplateDelivery 读取并校验模板绑定，构造后续消息渲染需要的动作状态。
 func (e *automationActionExecutor) prepareTemplateDelivery(ctx context.Context, task Task, action db.AutomationAction) (templateDeliveryState, error) {
+	// modeErr 即使模板不含库存绑定也拒绝非法策略，不允许损坏配置静默生效。
+	if _, modeErr := deliveryquantity.Parse(action.ConfigJSON); modeErr != nil {
+		return templateDeliveryState{}, noRetryAction(modeErr)
+	}
 	// state 保存模板绑定、展示名称及卡密变量缓存。
 	state := templateDeliveryState{
 		cardName: action.CardName, bindingCards: make(map[string]templateBindingCard, len(action.TemplateBindings)),
@@ -152,12 +157,11 @@ func (e *automationActionExecutor) prepareTemplateDelivery(ctx context.Context, 
 				return templateDeliveryState{}, errors.New("API 卡发货客户端未初始化")
 			}
 		}
-		// count 保存按订单数量折算后的变量卡密份数。
-		count := binding.DeliveryCount
-		if count <= 0 {
-			count = 1
+		// count、countErr 按动作策略计算每个变量的份数，不额外乘模板动作的 DeliveryCount。
+		count, countErr := deliveryquantity.Count(action.ConfigJSON, task.Quantity, binding.DeliveryCount)
+		if countErr != nil {
+			return templateDeliveryState{}, noRetryAction(countErr)
 		}
-		count *= deliveryQuantity(task)
 		state.bindingCards[binding.VariableKey] = templateBindingCard{binding: binding, card: card, count: count}
 	}
 	return state, nil
@@ -296,16 +300,6 @@ func (e *automationActionExecutor) clearTemplateMessageValues(state *templateDel
 		delete(state.values, key)
 		delete(state.loadedKeys, key)
 	}
-}
-
-// deliveryQuantity 把订单数量转换为至少一份的发货倍数。
-func deliveryQuantity(task Task) int {
-	// quantity 保存订单数量解析结果。
-	quantity := parsePositiveInt(task.Quantity)
-	if quantity <= 0 {
-		return 1
-	}
-	return quantity
 }
 
 // markReservationsSold 在包含这些批量卡密的模板消息确认发送后，把对应台账改为已售。

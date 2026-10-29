@@ -2394,6 +2394,10 @@ export interface components {
             delivery_count: number;
             message_template: string;
             delay_seconds: number;
+            /**
+             * @description 动作 JSON 对象；send_card/send_template 支持 quantity_mode=per_item（默认，按购买数量）或 per_order（每单固定份数）。卡券动作作用于 delivery_count；模板动作作用于每个绑定的 delivery_count，不额外乘动作份数。策略随运行快照冻结；非法策略拒绝保存和执行。
+             * @example {"quantity_mode":"per_order","delay_override":false}
+             */
             config_json: string;
             enabled: boolean;
             sort_order: number;
@@ -2422,6 +2426,7 @@ export interface components {
             delivery_count: number;
             message_template: string;
             delay_seconds: number;
+            /** @description 动作 JSON 配置，保留 quantity_mode；缺省为 per_item，per_order 表示每单固定份数。 */
             config_json: string;
             enabled: boolean;
             sort_order: number;

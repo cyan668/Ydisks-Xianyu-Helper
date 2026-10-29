@@ -104,7 +104,8 @@ const verifySystemSettingsWriteBoundary = () => {
 };
 
 try {
-  execFileSync(process.execPath, [generator, path.join(repositoryRoot, 'api', 'openapi.yaml'), '-o', temporarySchema], {
+  // 使用与 api:generate 相同的相对输入，避免生成器将 Windows 中文绝对路径误编码为文件名；仍比较完整生成字节。
+  execFileSync(process.execPath, [generator, path.relative(frontendRoot, path.join(repositoryRoot, 'api', 'openapi.yaml')), '-o', temporarySchema], {
     cwd: frontendRoot,
     stdio: 'inherit',
   });

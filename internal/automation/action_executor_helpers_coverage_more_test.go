@@ -34,7 +34,11 @@ func TestActionExecutorHelperBranches(t *testing.T) {
 	}
 	// quantityTask 保存有效订单数量，用于验证发货数量乘法。
 	quantityTask := Task{Quantity: "2"}
-	if deliverySendCount(quantityTask, db.AutomationAction{DeliveryCount: 3}) != 6 || deliverySendCount(Task{Quantity: "bad"}, db.AutomationAction{}) != 1 {
+	// quantityCount、quantityErr 验证历史按购买件数相乘的结果与成功状态。
+	quantityCount, quantityErr := deliverySendCount(quantityTask, db.AutomationAction{DeliveryCount: 3})
+	// fallbackCount、fallbackErr 验证旧任务非法数量仍保留一份兼容行为。
+	fallbackCount, fallbackErr := deliverySendCount(Task{Quantity: "bad"}, db.AutomationAction{})
+	if quantityErr != nil || fallbackErr != nil || quantityCount != 6 || fallbackCount != 1 {
 		t.Fatal("发货数量计算异常")
 	}
 	if appendTradeText("", " next ") != "next" || appendTradeText("first", "") != "first" || appendTradeText("first", "second") != "first\nsecond" {

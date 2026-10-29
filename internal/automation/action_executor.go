@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"xianyu-go/internal/db"
+	"xianyu-go/internal/deliveryquantity"
 	"xianyu-go/internal/money"
 	"xianyu-go/internal/orderspec"
 	"xianyu-go/internal/xianyu/cookierefresh"
@@ -687,19 +688,9 @@ func actionMatchesOrderSpec(task Task, action db.AutomationAction) bool {
 	return orderspec.Equal(task.SpecName, task.SpecValue, cfg.SpecName, cfg.SpecValue)
 }
 
-// deliverySendCount 根据动作单份数量和订单购买数量计算实际发送数量。
-func deliverySendCount(task Task, action db.AutomationAction) int {
-	// perUnit 是每个购买单位对应的卡密数量。
-	perUnit := action.DeliveryCount
-	if perUnit <= 0 {
-		perUnit = 1
-	}
-	// qty 是订单购买数量。
-	qty := parsePositiveInt(task.Quantity)
-	if qty <= 0 {
-		qty = 1
-	}
-	return perUnit * qty
+// deliverySendCount 使用 task 数量和 action 冻结策略计数；非法策略阻止取卡及历史补发。
+func deliverySendCount(task Task, action db.AutomationAction) (int, error) {
+	return deliveryquantity.Count(action.ConfigJSON, task.Quantity, action.DeliveryCount)
 }
 
 // parsePositiveInt 将数量文本解析为非负整数，非法值返回零。
