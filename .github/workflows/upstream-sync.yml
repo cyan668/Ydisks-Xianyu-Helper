@@ -1,0 +1,71 @@
+name: 同步官方正式版
+
+on:
+  schedule:
+    # UTC 19:17，即北京时间次日 03:17；避开整点拥堵。
+    - cron: '17 19 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 仅检查，不推送分支或创建 PR
+        type: boolean
+        default: false
+  push:
+    branches: [codex/custom]
+    paths:
+      - .github/scripts/upstream-sync*
+      - .github/workflows/upstream-sync.yml
+  pull_request:
+    paths:
+      - .github/scripts/upstream-sync*
+      - .github/workflows/upstream-sync.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-sync-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: 同步逻辑回归
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: node --test .github/scripts/upstream-sync.test.mjs
+
+  sync:
+    name: 检查并提出升级 PR
+    needs: validate
+    if: >-
+      github.repository == 'cyan668/Ydisks-Xianyu-Helper' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # 仅本任务可写代码/PR及调度原有CI，不授予发布镜像或部署权限。
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    concurrency:
+      group: upstream-release-writer
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: codex/custom
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: 检查官方正式版并创建安全合并提案
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_BASE_BRANCH: codex/custom
+          SYNC_DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: node .github/scripts/upstream-sync.mjs

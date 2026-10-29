@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - dev
+      - codex/custom
   workflow_dispatch:
 
 permissions:
