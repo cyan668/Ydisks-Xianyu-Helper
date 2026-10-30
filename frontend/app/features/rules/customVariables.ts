@@ -34,4 +34,3 @@ export const parseCustomVariables = (raw?: string): Record<string, string> => {
   }
   return {};
 };
-
