@@ -21,7 +21,6 @@ import (
 	notificationsapp "xianyu-go/internal/application/notifications"
 	orderapp "xianyu-go/internal/application/orders"
 	settingsapp "xianyu-go/internal/application/settings"
-	"xianyu-go/internal/buyerblock"
 )
 
 // AccountLoginResult 是账号登录持久化后可供 HTTP 响应使用的非敏感结果。
@@ -369,16 +368,6 @@ type ItemGreetingsPort interface {
 	Update(context.Context, int64, int64, itemgreetingapp.Draft) (itemgreetingapp.Rule, error)
 	Delete(context.Context, int64, int64) error
 	ClearRecords(context.Context, int64, string) error
-}
-
-// BuyerBlocksPort 是用户隔离的交易黑名单管理用例，运行时发货门禁不经由 HTTP。
-type BuyerBlocksPort interface {
-	// List 按当前用户与可选账号查询。
-	List(context.Context, int64, string) ([]buyerblock.Entry, error)
-	// Save 按认证用户创建或更新 entry。
-	Save(context.Context, int64, buyerblock.Entry) (buyerblock.Entry, error)
-	// Delete 只删除当前用户的记录。
-	Delete(context.Context, int64, int64) error
 }
 
 // LibraryPort 定义本地资源库能力：图片库、商品模板，以及「模板 × 账号」发布预检。

@@ -1,5 +1,6 @@
 import type { BuyerBlockTransport } from '../../../shared/api-contract/buyerBlocks';
 import type { BuyerBlock } from './buyerBlockModels';
+import { parseCustomVariables } from './customVariables';
 import {
 AccountDetail,
 AutomationAction,
@@ -23,7 +24,7 @@ ShippingRule,
 ShippingVariant
 } from './models';
 import { type RequestControlOptions } from '../../../shared/http/client';
-import { contractClient, runContractRequest } from '../../../shared/api-contract/client';
+import { contractClient, contractMultipartBody, runContractRequest } from '../../../shared/api-contract/client';
 import type { AutomationAuditEventListTransport,AutomationAuditEventTransport } from '../../../shared/api-contract/automation';
 import { collectionFrom,objectFrom } from '../../../shared/http/contract';
 export type * from './models';
@@ -67,11 +68,6 @@ export const updateDeliveryTemplate = async (id: number, payload: DeliveryTempla
 /** 发货模板编辑器删除模板。 */
 export const deleteDeliveryTemplate = async (id: number): Promise<{ success: boolean }> =>
   runContractRequest(/* signal 控制发货模板删除请求的取消和超时。 */ signal => contractClient.DELETE('/api/v1/delivery-templates/{template_id}', { params: { path: { template_id: String(id) } }, signal }));
-/** 动作配置中与规则自定义变量相关的最小读取结构。 */
-interface CustomVariableConfig {
-  /** 传给发货模板的自定义字符串键值表。 */
-  custom_variables?: unknown;
-}
 
 /** 模板绑定请求 DTO，保留请求使用 key、响应使用 variable_key 的契约差异。 */
 interface AutomationTemplateBindingRequestPayload {
@@ -156,37 +152,6 @@ const serializeTemplateBindings = (bindings?: DeliveryTemplateBinding[]) =>
     card_id: binding.card_id,
     delivery_count: binding.delivery_count,
   }));
-
-// parseCustomVariables 从动作配置中恢复规则页保存的自定义字符串键值表。
-const parseCustomVariables = (raw?: string): Record<string, string> => {
-  // config 保存动作配置 JSON 对象。
-  let config: unknown;
-  try {
-    config = JSON.parse(raw || '{}');
-  } catch {
-    return {};
-  }
-  if (!config || typeof config !== 'object' || Array.isArray(config)) return {};
-  // values 保存配置中的自定义变量候选值。
-  const values = (config as CustomVariableConfig).custom_variables;
-  if (values && typeof values === 'object' && !Array.isArray(values)) {
-    // result 保存经过字符串过滤的自定义变量键值表。
-    const result: Record<string, string> = {};
-    Object.entries(values).forEach(/* entry 保存一个自定义变量键值对，用于拆分和过滤响应字段。 */ entry => {
-      // key 保存当前自定义变量键。
-      const key = entry[0];
-      // value 保存当前自定义变量的字符串候选值。
-      const value = entry[1];
-      if (typeof value === 'string') result[key] = value;
-    });
-    return result;
-  }
-  if (Array.isArray(values)) {
-    // legacyResult 保存历史数组格式转换后的兼容键值表。
-    return Object.fromEntries(values.filter(/* value 是历史数组中的字符串候选值。 */ (value: unknown): value is string => typeof value === 'string').map(/* valueIndex 保存历史数组值及其兼容键名。 */ (value, valueIndex) => [String(valueIndex), value]));
-  }
-  return {};
-};
 
 // Rules - 自动化规则
 const normalizeShippingRules = (rules: any[]): ShippingRule[] => rules.map(/* 当前回调用于处理集合元素或接口响应。 */ (item: any) => ({
@@ -751,8 +716,9 @@ export const getAuditOrderDeliveredCards = async (orderId: string, options?: Req
   }));
 };
 
+
 /** normalizeBlock 把受契约校验的响应转换为独立 UI 草稿，不传播额外服务端字段。 */
-const normalizeBlock = (row: BuyerBlockTransport): BuyerBlock => ({ id: row.id, cookie_id: row.cookie_id, item_id: row.item_id, buyer_id: row.buyer_id, reason: row.reason, enabled: row.enabled, auto_close: row.auto_close });
+const normalizeBlock = (row: BuyerBlockTransport): BuyerBlock => ({ id: row.id, cookie_id: row.cookie_id, item_id: row.item_id, buyer_id: row.buyer_id, ...(row.buyer_nick ? { buyer_nick: row.buyer_nick } : {}), reason: row.reason, enabled: row.enabled, auto_close: row.auto_close });
 
 /** getBuyerBlocks 按 accountID 读取当前用户可见记录，options 取消过期列表请求。 */
 export const getBuyerBlocks = async (accountID: string, options?: RequestControlOptions): Promise<BuyerBlock[]> => {
@@ -764,7 +730,7 @@ export const getBuyerBlocks = async (accountID: string, options?: RequestControl
 /** saveBuyerBlock 创建或覆盖 draft；取消请求不承诺撤销已经到达服务端的保存。 */
 export const saveBuyerBlock = async (draft: BuyerBlock, options?: RequestControlOptions): Promise<BuyerBlock> => {
   // body 只挑选可写配置，避免把主键或其他服务端字段写入正文。
-  const body = { cookie_id: draft.cookie_id, item_id: draft.item_id, buyer_id: draft.buyer_id, reason: draft.reason, enabled: draft.enabled, auto_close: draft.auto_close };
+  const body = { cookie_id: draft.cookie_id, item_id: draft.item_id, buyer_id: draft.buyer_id, ...(draft.buyer_nick ? { buyer_nick: draft.buyer_nick } : {}), reason: draft.reason, enabled: draft.enabled, auto_close: draft.auto_close };
   // row 为服务端确认的持久化配置。
   const row = draft.id
     ? await runContractRequest(/* signal 控制更新请求。 */ signal => contractClient.PUT('/api/v1/buyer-blocks/{id}', { params: { path: { id: draft.id } }, body, signal }), options)
@@ -776,3 +742,27 @@ export const saveBuyerBlock = async (draft: BuyerBlock, options?: RequestControl
 export const deleteBuyerBlock = async (id: number, options?: RequestControlOptions): Promise<void> => {
   await runContractRequest(/* signal 控制删除请求。 */ signal => contractClient.DELETE('/api/v1/buyer-blocks/{id}', { params: { path: { id } }, signal }), options);
 };
+
+/** getBuyerBlockPage 通过数据库分页查询个人名单，不触发闲鱼平台请求。 */
+export const getBuyerBlockPage = async (accountID: string, page: number, search: string, options?: RequestControlOptions) => {
+  // result 为生成契约确认的当前页和筛选总数。
+  const result = await runContractRequest(/* signal 取消旧页或旧账号读取。 */ signal => contractClient.GET('/api/v1/buyer-blocks/page', { params: { query: { cookie_id: accountID || undefined, page, page_size: 20, search } }, signal }), options);
+  return { rows: result.data.map(normalizeBlock), total: result.total, page: result.page, pageSize: result.page_size };
+};
+
+/** batchBuyerBlocks 仅变更用户明确勾选的 IDs，action 不会发送平台拉黑或关单。 */
+export const batchBuyerBlocks = (ids: number[], action: 'enable' | 'disable' | 'delete', options?: RequestControlOptions) => runContractRequest(/* signal 控制此单次批量提交。 */ signal => contractClient.POST('/api/v1/buyer-blocks/batch', { body: { ids, action }, signal }), options);
+
+/** importBuyerBlocks 保留浏览器原生 FormData，把原系统 XLSX 或 CSV 交给服务端有界解析。 */
+export const importBuyerBlocks = (file: File, options?: RequestControlOptions) => {
+  // data 是当前上传独占的文件载荷，不写入日志或浏览器持久存储。
+  const data = new FormData(); data.append('file', file);
+  return runContractRequest(/* signal 在关闭或切账号时中止上传。 */ signal => contractClient.POST('/api/v1/buyer-blocks/import', { body: contractMultipartBody(data), signal }), options);
+};
+
+/** exportBuyerBlocks 下载本人当前账号范围的本地名单，不查询闲鱼平台。 */
+export const exportBuyerBlocks = async (accountID: string, options?: RequestControlOptions): Promise<Blob> => runContractRequest<Blob>(/* signal 控制二进制文件下载。 */ async signal => {
+  // result 用 parseAs=blob 保留文件字节，生成 schema 的 binary string 只在此边界转换。
+  const result = await contractClient.GET('/api/v1/buyer-blocks/export', { params: { query: { cookie_id: accountID || undefined } }, parseAs: 'blob', signal });
+  return result as unknown as { /** data 是二进制文件。 */ data?: Blob; /** error 是统一错误。 */ error?: unknown; /** response 是 HTTP 元信息。 */ response: Response };
+}, options);

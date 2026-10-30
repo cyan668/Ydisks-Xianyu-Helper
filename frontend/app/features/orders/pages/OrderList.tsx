@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { formatLocalDateTime } from '../../../../dateTime';
 import type { OrderStatus } from '../api';
 import { DeliveredCardsSection } from '../components/DeliveredCardsSection';
+import { OrderBuyerBlock } from '../components/OrderBuyerBlock';
 import { OrderFilterBar } from '../components/OrderFilterBar';
 import { useOrderQuery } from '../hooks';
 import { useOrderActions } from '../orderActions';
@@ -372,6 +373,7 @@ const OrderList: React.FC = () => {
                 >
                   关闭
                 </button>
+                <OrderBuyerBlock key={selectedOrder.order_id} orderID={selectedOrder.order_id} buyerID={selectedOrder.buyer_id} />
                 {selectedOrder.status === 'pending_ship' && (
                   <button
                     onClick={/* 当前回调处理用户交互或异步状态变化。 */ () => {

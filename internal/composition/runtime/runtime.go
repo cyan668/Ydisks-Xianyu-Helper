@@ -155,15 +155,6 @@ func BuildRuntime(options RuntimeOptions, infrastructure RuntimeInfrastructure) 
 			return Runtime{}, fmt.Errorf("登记二维码生命周期组件失败: %w", addErr)
 		}
 	}
-	// transportApplications、transportErr 分别是通知等共享应用服务集合及其构造错误。
-	transportApplications, transportErr := adapter.NewTransportApplicationServices(adapter.TransportApplicationServiceOptions{
-		AutomationDependencies: automationDependencies, MiscDependencies: miscDependencies, AdminSettingsDependencies: adminSettingsDependencies,
-		AdminRuntime: runtimeBundle.Manager, AccountTaskRunner: adapter.NewAccountTaskRunner(runtimeBundle.Automation), ChannelSender: runtimeBundle.Notifier, ModelClient: adapter.NewAIModelClient(), OutboundPolicy: netguard.DefaultPolicy(),
-		RuntimeLogSource: adapter.NewRuntimeLogSource(logging.CurrentRuntimeBuffer()),
-	})
-	if transportErr != nil {
-		return Runtime{}, fmt.Errorf("构造 transport 应用服务失败: %w", transportErr)
-	}
 	// updateRunningCookie 将平台返回的新 Cookie 同步到运行时；值不记录到日志。
 	updateRunningCookie := func(ctx context.Context, accountID, value string) {
 		if services == nil {
@@ -173,6 +164,16 @@ func BuildRuntime(options RuntimeOptions, infrastructure RuntimeInfrastructure) 
 		if updateErr := services.UpdateRunningCookie(ctx, accountID, value); updateErr != nil {
 			infrastructure.Logger.Warn("Cookie 更新后同步账号运行时失败", "cookie_id", accountID, "err", updateErr)
 		}
+	}
+	// transportApplications、transportErr 分别是通知等共享应用服务集合及其构造错误。
+	transportApplications, transportErr := adapter.NewTransportApplicationServices(adapter.TransportApplicationServiceOptions{
+		AutomationDependencies: automationDependencies, MiscDependencies: miscDependencies, AdminSettingsDependencies: adminSettingsDependencies,
+		AdminRuntime: runtimeBundle.Manager, AccountTaskRunner: adapter.NewAccountTaskRunner(runtimeBundle.Automation), ChannelSender: runtimeBundle.Notifier, ModelClient: adapter.NewAIModelClient(), OutboundPolicy: netguard.DefaultPolicy(),
+		RuntimeLogSource:   adapter.NewRuntimeLogSource(logging.CurrentRuntimeBuffer()),
+		BuyerBlockPlatform: automationDependencies.NewBuyerBlockPlatform(platformDependencies.MTOPClient(), updateRunningCookie),
+	})
+	if transportErr != nil {
+		return Runtime{}, fmt.Errorf("构造 transport 应用服务失败: %w", transportErr)
 	}
 	// sessionRecovery 仅把确认的会话失效交给已构造的账号应用服务恢复。
 	sessionRecovery := adapter.NewSessionRecoveryHandler(infrastructure.Logger, func(ctx context.Context, accountID string) bool {

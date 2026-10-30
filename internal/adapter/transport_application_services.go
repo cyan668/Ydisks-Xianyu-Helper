@@ -38,6 +38,8 @@ type TransportApplicationServiceOptions struct {
 	OutboundPolicy settingsapp.OutboundPolicy
 	// RuntimeLogSource 提供进程内已脱敏运行日志的只读来源；为空时查询返回空页。
 	RuntimeLogSource logsapp.Reader
+	// BuyerBlockPlatform 为可选逐会话平台端口；旧离线构造仍支持本地黑名单管理。
+	BuyerBlockPlatform blockapp.OfficialPlatform
 }
 
 // TransportApplicationServices 是由进程组合根一次性构造并注入 Server 的应用服务集合。
@@ -120,7 +122,7 @@ func NewTransportApplicationServices(options TransportApplicationServiceOptions)
 		PublishAutomationRules: automationapp.NewPublishRuleService(automationRepository),
 		DefaultReplies:         defaultreplyapp.NewService(options.AutomationDependencies.NewDefaultReplyRepository()),
 		ItemGreetings:          itemgreetingapp.NewService(options.AutomationDependencies.NewItemGreetingRepository()),
-		BuyerBlocks:            blockapp.NewService(options.AutomationDependencies.NewBuyerBlockRepository()),
+		BuyerBlocks:            blockapp.NewServiceWithPlatform(options.AutomationDependencies.NewBuyerBlockRepository(), options.BuyerBlockPlatform),
 		Keywords:               keywordsapp.NewService(options.AutomationDependencies.NewKeywordRepository()),
 		RuntimeLogs:            logsapp.NewService(options.RuntimeLogSource),
 	}

@@ -324,3 +324,6 @@ export const getOrderDeliveredCards = async (orderId: string, options?: RequestC
     deliveredAtMs: (item.sold_at || item.created_at) * 1000,
   }));
 };
+
+/** addOrderBuyerBlock 从已授权订单派生买家身份，只写本地个人黑名单。 */
+export const addOrderBuyerBlock = (orderID: string, level: 'user' | 'account' | 'item', reason: string, options?: RequestControlOptions) => runContractRequest(/* signal 控制当前订单的本地拉黑请求。 */ signal => contractClient.POST('/api/v1/orders/{order_id}/buyer-block', { params: { path: { order_id: orderID } }, body: { level, reason }, signal }), options);

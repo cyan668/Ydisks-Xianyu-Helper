@@ -26,6 +26,8 @@ type Repository interface {
 type Service struct {
 	// repository 由组合根提供并管理数据库生命周期。
 	repository Repository
+	// platform 是可选的逐会话官方拉黑端口，不启动后台同步。
+	platform OfficialPlatform
 }
 
 // NewService 创建使用 repository 的黑名单应用服务。
@@ -58,7 +60,7 @@ func (s *Service) Save(ctx context.Context, userID int64, entry buyerblock.Entry
 	entry.CookieID, entry.ItemID, entry.Reason = strings.TrimSpace(entry.CookieID), strings.TrimSpace(entry.ItemID), strings.TrimSpace(entry.Reason)
 	// normalized、err 核验稳定买家身份，不接受可变昵称作为替代。
 	normalized, err := buyerblock.NormalizeBuyerID(entry.BuyerID)
-	if err != nil || len(entry.CookieID) > 191 || len(entry.ItemID) > 191 || utf8.RuneCountInString(entry.Reason) > 500 || (entry.ItemID != "" && entry.CookieID == "") {
+	if err != nil || len(entry.CookieID) > 191 || len(entry.ItemID) > 191 || utf8.RuneCountInString(entry.BuyerNick) > 100 || utf8.RuneCountInString(entry.Reason) > 500 || (entry.ItemID != "" && entry.CookieID == "") {
 		return buyerblock.Entry{}, buyerblock.ErrInvalid
 	}
 	entry.BuyerID = normalized

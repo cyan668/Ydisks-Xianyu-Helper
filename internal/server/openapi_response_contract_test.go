@@ -63,6 +63,7 @@ func TestOpenAPISuccessContractCoverage(t *testing.T) {
 		{name: "card-sold-count", run: TestCardListIncludesSoldCount},
 		{name: "item-greetings", run: TestItemGreetingHandlersContract},
 		{name: "buyer-blocks", run: TestBuyerBlockHandlersContract},
+		{name: "buyer-block-management", run: TestBuyerBlockManagementContract},
 		{name: "library", run: TestLibraryHandlersContract},
 		{name: "automation-audit-events", run: TestAutomationAuditEventsEndpoint},
 	}

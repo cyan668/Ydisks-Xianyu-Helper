@@ -79,6 +79,8 @@ type ClientImpl struct {
 	ConsignURL string
 	// CloseOrderURL 仅供本地 HTTP 测试替换卖家关单端点；生产使用默认地址和统一节流。
 	CloseOrderURL string
+	// OfficialBlacklistBaseURL 仅供回环 HTTP 测试覆盖会话黑名单端点；生产保持为空。
+	OfficialBlacklistBaseURL string
 	// FreeShippingURL 覆盖砍价订单免拼发货端点，仅供本地 HTTP 回归测试注入替身；空值使用官方端点。
 	FreeShippingURL string
 	// AdjustPriceURL 覆盖订单改价端点，仅供测试注入本地 HTTP 服务。

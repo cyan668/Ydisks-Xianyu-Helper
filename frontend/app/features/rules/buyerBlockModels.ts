@@ -8,6 +8,8 @@ export interface BuyerBlock {
   item_id: string;
   /** buyer_id 是平台稳定买家 ID，不能使用昵称。 */
   buyer_id: string;
+  /** buyer_nick 只供显示，不参与交易匹配。 */
+  buyer_nick?: string;
   /** reason 是仅供管理者查看的备注。 */
   reason: string;
   /** enabled 控制是否参与交易拦截。 */

@@ -19,7 +19,7 @@ type BuyerBlocks struct {
 // List 返回 userID 的记录；accountID 非空时同时显示对此账号生效的用户级记录。
 func (b *BuyerBlocks) List(ctx context.Context, userID int64, accountID string) ([]buyerblock.Entry, error) {
 	// rows、err 保存用户隔离查询的结果和错误。
-	rows, err := b.DB.QueryContext(ctx, `SELECT id,user_id,cookie_id,item_id,buyer_id,reason,enabled,auto_close FROM buyer_blocks WHERE user_id=? AND (?='' OR cookie_id='' OR cookie_id=?) ORDER BY id DESC`, userID, accountID, accountID)
+	rows, err := b.DB.QueryContext(ctx, `SELECT id,user_id,cookie_id,item_id,buyer_id,buyer_nick,reason,enabled,auto_close FROM buyer_blocks WHERE user_id=? AND (?='' OR cookie_id='' OR cookie_id=?) ORDER BY id DESC`, userID, accountID, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +29,7 @@ func (b *BuyerBlocks) List(ctx context.Context, userID int64, accountID string) 
 	for rows.Next() {
 		// entry 是当前非敏感规则记录。
 		var entry buyerblock.Entry
-		if err := rows.Scan(&entry.ID, &entry.UserID, &entry.CookieID, &entry.ItemID, &entry.BuyerID, &entry.Reason, &entry.Enabled, &entry.AutoClose); err != nil { // err 为扫描失败原因。
+		if err := rows.Scan(&entry.ID, &entry.UserID, &entry.CookieID, &entry.ItemID, &entry.BuyerID, &entry.BuyerNick, &entry.Reason, &entry.Enabled, &entry.AutoClose); err != nil { // err 为扫描失败原因。
 			return nil, err
 		}
 		entries = append(entries, entry)
@@ -42,11 +42,11 @@ func (b *BuyerBlocks) Save(ctx context.Context, entry buyerblock.Entry) (int64, 
 	// id、err 为最终主键和写入错误。
 	id, err := entry.ID, error(nil)
 	if entry.ID == 0 {
-		id, err = insertReturningID(ctx, b.DB, b.Dialect, `INSERT INTO buyer_blocks(user_id,cookie_id,item_id,buyer_id,reason,enabled,auto_close) VALUES(?,?,?,?,?,?,?)`, entry.UserID, entry.CookieID, entry.ItemID, entry.BuyerID, entry.Reason, boolToInt(entry.Enabled), boolToInt(entry.AutoClose))
+		id, err = insertReturningID(ctx, b.DB, b.Dialect, `INSERT INTO buyer_blocks(user_id,cookie_id,item_id,buyer_id,buyer_nick,reason,enabled,auto_close) VALUES(?,?,?,?,?,?,?,?)`, entry.UserID, entry.CookieID, entry.ItemID, entry.BuyerID, entry.BuyerNick, entry.Reason, boolToInt(entry.Enabled), boolToInt(entry.AutoClose))
 	} else {
 		// result 是按用户限定的更新结果。
 		var result sql.Result
-		result, err = b.DB.ExecContext(ctx, `UPDATE buyer_blocks SET cookie_id=?,item_id=?,buyer_id=?,reason=?,enabled=?,auto_close=? WHERE id=? AND user_id=?`, entry.CookieID, entry.ItemID, entry.BuyerID, entry.Reason, boolToInt(entry.Enabled), boolToInt(entry.AutoClose), entry.ID, entry.UserID)
+		result, err = b.DB.ExecContext(ctx, `UPDATE buyer_blocks SET cookie_id=?,item_id=?,buyer_id=?,buyer_nick=?,reason=?,enabled=?,auto_close=? WHERE id=? AND user_id=?`, entry.CookieID, entry.ItemID, entry.BuyerID, entry.BuyerNick, entry.Reason, boolToInt(entry.Enabled), boolToInt(entry.AutoClose), entry.ID, entry.UserID)
 		if err == nil {
 			// affected、countErr 区分写入失败和未修改记录。
 			affected, countErr := result.RowsAffected()
@@ -137,7 +137,7 @@ func (b *BuyerBlocks) MatchOrder(ctx context.Context, accountID, orderID, buyerI
 	// entry 保存最具体的一条可能命中，查询只连接账号所有者字段。
 	var entry buyerblock.Entry
 	// err 为查询结果，缺身份时查询所有可能规则以防静默放行。
-	err := b.DB.QueryRowContext(ctx, `SELECT b.id,b.user_id,b.cookie_id,b.item_id,b.buyer_id,b.reason,b.enabled,b.auto_close FROM buyer_blocks b JOIN cookies c ON c.user_id=b.user_id WHERE c.id=? AND b.enabled=1 AND (b.cookie_id='' OR b.cookie_id=c.id) AND (b.item_id='' OR b.item_id=? OR ?='') AND (b.buyer_id=? OR ?='') ORDER BY CASE WHEN b.item_id<>'' THEN 2 WHEN b.cookie_id<>'' THEN 1 ELSE 0 END DESC,b.id ASC LIMIT 1`, accountID, itemID, itemID, normalized, normalized).Scan(&entry.ID, &entry.UserID, &entry.CookieID, &entry.ItemID, &entry.BuyerID, &entry.Reason, &entry.Enabled, &entry.AutoClose)
+	err := b.DB.QueryRowContext(ctx, `SELECT b.id,b.user_id,b.cookie_id,b.item_id,b.buyer_id,b.buyer_nick,b.reason,b.enabled,b.auto_close FROM buyer_blocks b JOIN cookies c ON c.user_id=b.user_id WHERE c.id=? AND b.enabled=1 AND (b.cookie_id='' OR b.cookie_id=c.id) AND (b.item_id='' OR b.item_id=? OR ?='') AND (b.buyer_id=? OR ?='') ORDER BY CASE WHEN b.item_id<>'' THEN 2 WHEN b.cookie_id<>'' THEN 1 ELSE 0 END DESC,b.id ASC LIMIT 1`, accountID, itemID, itemID, normalized, normalized).Scan(&entry.ID, &entry.UserID, &entry.CookieID, &entry.ItemID, &entry.BuyerID, &entry.BuyerNick, &entry.Reason, &entry.Enabled, &entry.AutoClose)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

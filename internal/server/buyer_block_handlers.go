@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	blockapp "xianyu-go/internal/application/buyerblock"
 	"xianyu-go/internal/buyerblock"
 )
 
@@ -17,6 +18,8 @@ type buyerBlockRequest struct {
 	ItemID string `json:"item_id"`
 	// BuyerID 是稳定平台买家 ID，而非昵称。
 	BuyerID string `json:"buyer_id"`
+	// BuyerNick 仅供展示和表格往返，不参与匹配。
+	BuyerNick string `json:"buyer_nick"`
 	// Reason 是仅供管理者查看的备注。
 	Reason string `json:"reason"`
 	// Enabled 显式决定是否参与交易拦截。
@@ -35,7 +38,7 @@ type buyerBlockResponse struct {
 
 // buyerBlockJSON 把 entry 转换为 HTTP 配置摘要。
 func buyerBlockJSON(entry buyerblock.Entry) buyerBlockResponse {
-	return buyerBlockResponse{ID: entry.ID, buyerBlockRequest: buyerBlockRequest{CookieID: entry.CookieID, ItemID: entry.ItemID, BuyerID: entry.BuyerID, Reason: entry.Reason, Enabled: entry.Enabled, AutoClose: entry.AutoClose}}
+	return buyerBlockResponse{ID: entry.ID, buyerBlockRequest: buyerBlockRequest{CookieID: entry.CookieID, ItemID: entry.ItemID, BuyerID: entry.BuyerID, BuyerNick: entry.BuyerNick, Reason: entry.Reason, Enabled: entry.Enabled, AutoClose: entry.AutoClose}}
 }
 
 // listBuyerBlocks 按登录用户和可选 cookie_id 返回交易黑名单。
@@ -84,7 +87,7 @@ func (s *Server) saveBuyerBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// entry、err 是经过归属和输入校验后的持久化结果。
-	entry, err := s.applicationServiceSet().buyerBlocks.Save(r.Context(), userID, buyerblock.Entry{ID: id, CookieID: request.CookieID, ItemID: request.ItemID, BuyerID: request.BuyerID, Reason: request.Reason, Enabled: request.Enabled, AutoClose: request.AutoClose})
+	entry, err := s.applicationServiceSet().buyerBlocks.Save(r.Context(), userID, buyerblock.Entry{ID: id, CookieID: request.CookieID, ItemID: request.ItemID, BuyerID: request.BuyerID, BuyerNick: request.BuyerNick, Reason: request.Reason, Enabled: request.Enabled, AutoClose: request.AutoClose})
 	if err != nil {
 		writeBuyerBlockError(w, r, err)
 		return
@@ -128,6 +131,8 @@ func writeBuyerBlockError(w http.ResponseWriter, r *http.Request, err error) {
 		status, message = http.StatusNotFound, err.Error()
 	case errors.Is(err, buyerblock.ErrConflict):
 		status, message = http.StatusConflict, err.Error()
+	case errors.Is(err, blockapp.ErrPlatformUnavailable):
+		status, message = http.StatusServiceUnavailable, err.Error()
 	}
 	writeErrRequest(w, r, status, message)
 }

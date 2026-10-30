@@ -38,6 +38,8 @@ type Entry struct {
 	ItemID string
 	// BuyerID 是平台买家 ID，不使用可变昵称匹配。
 	BuyerID string
+	// BuyerNick 是展示昵称，绝不用于身份匹配。
+	BuyerNick string
 	// Reason 是管理备注，不发送给买家或平台。
 	Reason string
 	// Enabled 控制是否参与匹配。
