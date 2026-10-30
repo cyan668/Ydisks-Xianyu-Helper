@@ -1,3 +1,5 @@
+import type { BuyerBlockTransport } from '../../../shared/api-contract/buyerBlocks';
+import type { BuyerBlock } from './buyerBlockModels';
 import {
 AccountDetail,
 AutomationAction,
@@ -747,4 +749,30 @@ export const getAuditOrderDeliveredCards = async (orderId: string, options?: Req
     content: item.content,
     deliveredAtMs: (item.sold_at || item.created_at) * 1000,
   }));
+};
+
+/** normalizeBlock 把受契约校验的响应转换为独立 UI 草稿，不传播额外服务端字段。 */
+const normalizeBlock = (row: BuyerBlockTransport): BuyerBlock => ({ id: row.id, cookie_id: row.cookie_id, item_id: row.item_id, buyer_id: row.buyer_id, reason: row.reason, enabled: row.enabled, auto_close: row.auto_close });
+
+/** getBuyerBlocks 按 accountID 读取当前用户可见记录，options 取消过期列表请求。 */
+export const getBuyerBlocks = async (accountID: string, options?: RequestControlOptions): Promise<BuyerBlock[]> => {
+  // rows 是生成契约定义的响应数组，空结果保持空数组。
+  const rows = await runContractRequest(/* signal 控制此列表读取的生命周期。 */ signal => contractClient.GET('/api/v1/buyer-blocks', { params: { query: { cookie_id: accountID || undefined } }, signal }), options);
+  return rows.map(normalizeBlock);
+};
+
+/** saveBuyerBlock 创建或覆盖 draft；取消请求不承诺撤销已经到达服务端的保存。 */
+export const saveBuyerBlock = async (draft: BuyerBlock, options?: RequestControlOptions): Promise<BuyerBlock> => {
+  // body 只挑选可写配置，避免把主键或其他服务端字段写入正文。
+  const body = { cookie_id: draft.cookie_id, item_id: draft.item_id, buyer_id: draft.buyer_id, reason: draft.reason, enabled: draft.enabled, auto_close: draft.auto_close };
+  // row 为服务端确认的持久化配置。
+  const row = draft.id
+    ? await runContractRequest(/* signal 控制更新请求。 */ signal => contractClient.PUT('/api/v1/buyer-blocks/{id}', { params: { path: { id: draft.id } }, body, signal }), options)
+    : await runContractRequest(/* signal 控制创建请求。 */ signal => contractClient.POST('/api/v1/buyer-blocks', { body, signal }), options);
+  return normalizeBlock(row);
+};
+
+/** deleteBuyerBlock 删除 id 对应的当前用户记录，不清除已发生的关单占用。 */
+export const deleteBuyerBlock = async (id: number, options?: RequestControlOptions): Promise<void> => {
+  await runContractRequest(/* signal 控制删除请求。 */ signal => contractClient.DELETE('/api/v1/buyer-blocks/{id}', { params: { path: { id } }, signal }), options);
 };

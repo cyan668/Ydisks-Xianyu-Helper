@@ -27,8 +27,8 @@ ShippingRule,
 ShippingVariant
 } from './api';
 
-// RulesTab 表示规则页面的五个业务页签：交易自动化、关键词回复、账号默认回复、商品首次回复和规则日志。
-export type RulesTab = 'automation' | 'reply' | 'default' | 'greeting' | 'logs';
+// RulesTab 表示规则页的交易、客服、黑名单与审计页签。
+export type RulesTab = 'automation' | 'reply' | 'default' | 'greeting' | 'blocks' | 'logs';
 
 // RulesProps 描述规则页面从父级接收的联动参数。
 export interface RulesProps {

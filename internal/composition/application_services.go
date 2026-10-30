@@ -19,6 +19,7 @@ import (
 	adminapp "xianyu-go/internal/application/admin"
 	analyticsapp "xianyu-go/internal/application/analytics"
 	automationapp "xianyu-go/internal/application/automation"
+	blockapp "xianyu-go/internal/application/buyerblock"
 	cardsapp "xianyu-go/internal/application/cards"
 	chatapp "xianyu-go/internal/application/chat"
 	defaultreplyapp "xianyu-go/internal/application/defaultreply"
@@ -132,6 +133,8 @@ type Services struct {
 	defaultReplies *defaultreplyapp.Service
 	// itemGreetings 是商品首次回复规则应用服务。
 	itemGreetings *itemgreetingapp.Service
+	// buyerBlocks 是交易黑名单应用服务。
+	buyerBlocks *blockapp.Service
 	// library 是本地资源库（图片库、商品模板、模板发布预检）应用服务。
 	library *libraryapp.Service
 	// keywords 是关键词规则与指定商品回复应用服务。
@@ -352,6 +355,8 @@ type TransportPorts struct {
 	PublishAutomationRules *automationapp.PublishRuleService
 	DefaultReplies         *defaultreplyapp.Service
 	ItemGreetings          *itemgreetingapp.Service
+	// BuyerBlocks 是供 HTTP 层使用的交易黑名单服务。
+	BuyerBlocks *blockapp.Service
 	// Library 是本地资源库应用服务。
 	Library  *libraryapp.Service
 	Keywords *keywordsapp.Service
@@ -378,7 +383,7 @@ func (services *Services) TransportPorts() TransportPorts {
 		AccountSummaries: services.accountSummaries, AccountTasks: services.accountTasks, Chat: services.chat,
 		UncertainNotifications: services.uncertainNotifications, NotificationChannels: services.notificationChannels,
 		Analytics: services.analytics, AutomationIssues: services.automationIssues, AutomationAudit: services.automationAudit, AutomationRules: services.automationRules, DeliveryTemplates: services.deliveryTemplates,
-		Cards: services.cards, APICardTester: services.apiCardTester, PublishAutomationRules: services.publishAutomationRules, DefaultReplies: services.defaultReplies, ItemGreetings: services.itemGreetings, Library: services.library,
+		Cards: services.cards, APICardTester: services.apiCardTester, PublishAutomationRules: services.publishAutomationRules, DefaultReplies: services.defaultReplies, ItemGreetings: services.itemGreetings, BuyerBlocks: services.buyerBlocks, Library: services.library,
 		Keywords: services.keywords, Settings: services.settings, Admin: services.admin, RuntimeLogs: services.runtimeLogs,
 	}
 }
@@ -518,43 +523,40 @@ func New(dependencies Dependencies) (*Services, error) {
 		itemCategoryRecommendation:  catalogServices.categoryRecommendation,
 		itemBatchPreviewPersistence: catalogServices.previewPersistence,
 		itemBatchLocalPublish:       batchServices.localPublish,
-		itemSync: itemapp.NewSyncService(dependencies.ItemDependencies.NewItemSyncRepository(dependencies.MTopClient, dependencies.Logger, dependencies.UpdateRunningCookie, func(ctx context.Context, cookieID string, err error) {
-			if sessionRecovery != nil {
-				sessionRecovery(ctx, cookieID, err)
-			}
-		})),
-		itemCatalog:            catalogServices.catalog,
-		itemCatalogMutation:    catalogServices.mutation,
-		itemAISettings:         catalogServices.aiSettings,
-		accountLogin:           &accountLoginService{cookieWriterFactory: cookieWriterFactory, cookieUpdaterFactory: cookieUpdaterFactory, sessionPort: accountRepository, createApplication: accountLoginCreate, qrApplication: accountQRLogin, qrSessions: qrSessionRegistry},
-		authentication:         nil,
-		loginAudit:             loginAudit,
-		passwordLogin:          accountapp.NewPasswordLoginService(),
-		accountDelete:          accountDelete,
-		accountProfile:         accountProfile,
-		accountLongLogin:       accountLongLogin,
-		accountSettings:        accountSettings,
-		accountRuntime:         accountRuntime,
-		accountSummaries:       accountSummaries,
-		accountTasks:           dependencies.TransportApplications.AccountTasks,
-		credentialWake:         credentialWake,
-		chat:                   buildChatApplication(dependencies),
-		uncertainNotifications: dependencies.TransportApplications.UncertainNotifications,
-		notificationChannels:   dependencies.TransportApplications.NotificationChannels,
-		analytics:              dependencies.TransportApplications.Analytics,
-		automationRules:        dependencies.TransportApplications.AutomationRules,
-		deliveryTemplates:      dependencies.TransportApplications.DeliveryTemplates,
-		cards:                  dependencies.TransportApplications.Cards,
-		apiCardTester:          dependencies.TransportApplications.APICardTester,
-		publishAutomationRules: dependencies.TransportApplications.PublishAutomationRules,
-		automationIssues:       dependencies.TransportApplications.AutomationIssues,
-		automationAudit:        dependencies.TransportApplications.AutomationAudit,
-		defaultReplies:         dependencies.TransportApplications.DefaultReplies,
-		itemGreetings:          dependencies.TransportApplications.ItemGreetings,
-		keywords:               dependencies.TransportApplications.Keywords,
-		settings:               dependencies.TransportApplications.Settings,
-		admin:                  dependencies.TransportApplications.Admin,
-		runtimeLogs:            dependencies.TransportApplications.RuntimeLogs,
+		itemSync:                    buildItemSyncService(dependencies, sessionRecovery),
+		itemCatalog:                 catalogServices.catalog,
+		itemCatalogMutation:         catalogServices.mutation,
+		itemAISettings:              catalogServices.aiSettings,
+		accountLogin:                &accountLoginService{cookieWriterFactory: cookieWriterFactory, cookieUpdaterFactory: cookieUpdaterFactory, sessionPort: accountRepository, createApplication: accountLoginCreate, qrApplication: accountQRLogin, qrSessions: qrSessionRegistry},
+		authentication:              nil,
+		loginAudit:                  loginAudit,
+		passwordLogin:               accountapp.NewPasswordLoginService(),
+		accountDelete:               accountDelete,
+		accountProfile:              accountProfile,
+		accountLongLogin:            accountLongLogin,
+		accountSettings:             accountSettings,
+		accountRuntime:              accountRuntime,
+		accountSummaries:            accountSummaries,
+		accountTasks:                dependencies.TransportApplications.AccountTasks,
+		credentialWake:              credentialWake,
+		chat:                        buildChatApplication(dependencies),
+		uncertainNotifications:      dependencies.TransportApplications.UncertainNotifications,
+		notificationChannels:        dependencies.TransportApplications.NotificationChannels,
+		analytics:                   dependencies.TransportApplications.Analytics,
+		automationRules:             dependencies.TransportApplications.AutomationRules,
+		deliveryTemplates:           dependencies.TransportApplications.DeliveryTemplates,
+		cards:                       dependencies.TransportApplications.Cards,
+		apiCardTester:               dependencies.TransportApplications.APICardTester,
+		publishAutomationRules:      dependencies.TransportApplications.PublishAutomationRules,
+		automationIssues:            dependencies.TransportApplications.AutomationIssues,
+		automationAudit:             dependencies.TransportApplications.AutomationAudit,
+		defaultReplies:              dependencies.TransportApplications.DefaultReplies,
+		itemGreetings:               dependencies.TransportApplications.ItemGreetings,
+		buyerBlocks:                 dependencies.TransportApplications.BuyerBlocks,
+		keywords:                    dependencies.TransportApplications.Keywords,
+		settings:                    dependencies.TransportApplications.Settings,
+		admin:                       dependencies.TransportApplications.Admin,
+		runtimeLogs:                 dependencies.TransportApplications.RuntimeLogs,
 	}
 	// authentication、authenticationErr 分别是认证应用服务及其构造错误。
 	authentication, authenticationErr := accountapp.NewAuthenticationService(dependencies.AccountDependencies.NewAuthenticationRepository())
@@ -563,6 +565,15 @@ func New(dependencies Dependencies) (*Services, error) {
 	}
 	services.authentication = authentication
 	return services, nil
+}
+
+// buildItemSyncService 使用 dependencies 的固定平台依赖构造商品同步用例，Session 失效仍交给原 sessionRecovery，不改变调用顺序。
+func buildItemSyncService(dependencies Dependencies, sessionRecovery adapter.SessionRecoveryHandler) *itemapp.SyncService {
+	return itemapp.NewSyncService(dependencies.ItemDependencies.NewItemSyncRepository(dependencies.MTopClient, dependencies.Logger, dependencies.UpdateRunningCookie, func(ctx context.Context, cookieID string, err error) { // ctx、cookieID、err 是原商品同步的会话失败上下文，不持有凭据锁。
+		if sessionRecovery != nil {
+			sessionRecovery(ctx, cookieID, err)
+		}
+	}))
 }
 
 // buildChatApplication 复用运行时组合根预先创建的聊天应用；旧测试构造路径仍按原依赖现场创建。

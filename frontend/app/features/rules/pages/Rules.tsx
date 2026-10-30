@@ -29,6 +29,7 @@ import TemplateVariantEditor from '../components/TemplateVariantEditor';
 import DeliveryQuantityEditor from '../components/DeliveryQuantityEditor';
 import ReplyRuleEditor from '../components/ReplyRuleEditor';
 import ItemGreetingPanel from '../components/ItemGreetingPanel';
+import BuyerBlockPanel from '../components/BuyerBlockPanel';
 import SearchableSelect from '../../../../shared/ui/SearchableSelect';
 import { useRulesData } from '../hooks';
 import { filterAutomationIssues } from '../issueState';
@@ -250,7 +251,7 @@ const Rules: React.FC<RulesProps> = ({ initialDeliveryTarget, onDeliveryTargetHa
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             刷新
           </button>
-          {activeTab !== 'greeting' && activeTab !== 'logs' && (
+          {activeTab !== 'greeting' && activeTab !== 'logs' && activeTab !== 'blocks' && (
           <button
             onClick={activeTab === 'automation' ? /* 当前回调处理用户交互或异步状态变化。 */ () => openNewAutomationRule('order_paid') : activeTab === 'reply' ? handleAddReplyRule : /* 当前回调处理用户交互或异步状态变化。 */ () => void openDefaultReplyModal()}
             disabled={!selectedAccountId}
@@ -269,6 +270,7 @@ const Rules: React.FC<RulesProps> = ({ initialDeliveryTarget, onDeliveryTargetHa
           { id: 'reply' as const, label: '关键词回复', icon: MessageCircle },
           { id: 'default' as const, label: '账号默认回复', icon: Bot },
           { id: 'greeting' as const, label: '商品首次回复', icon: Gift },
+          { id: 'blocks' as const, label: '买家黑名单', icon: SlidersHorizontal },
           { id: 'logs' as const, label: '规则日志', icon: ScrollText },
         ].map(/* 当前回调处理用户交互或异步状态变化。 */ tab => {
           // Icon 渲染Icon React 组件。
@@ -679,6 +681,8 @@ const Rules: React.FC<RulesProps> = ({ initialDeliveryTarget, onDeliveryTargetHa
       )}
 
       {activeTab === 'greeting' && <ItemGreetingPanel accountID={selectedAccountId} />}
+
+      {activeTab === 'blocks' && <BuyerBlockPanel accountID={selectedAccountId} accounts={accounts.map(/* account 仅传递账号标识和展示名，不传播凭据。 */ account => ({ id: account.id, label: accountLabel(account) }))} />}
 
       {activeTab === 'logs' && (
         AuditPanel ? (

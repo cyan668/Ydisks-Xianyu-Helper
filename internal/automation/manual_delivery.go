@@ -13,6 +13,12 @@ import (
 
 // ManualFullDelivery 对已存在订单执行完整发货，复用付款后发货规则但隔离人工与自动运行的幂等键。
 func (c *Center) ManualFullDelivery(ctx context.Context, order *db.Order) (sent int, deliveryErr error) {
+	if c != nil && order != nil {
+		// blockErr 必须在读取平台详情、领取补发运行或修改补取占用之前返回。
+		if blockErr := c.actions.ensureBuyerAllowed(ctx, Task{AccountID: order.CookieID, OrderID: order.OrderID, BuyerID: order.BuyerID, ItemID: order.ItemID}); blockErr != nil {
+			return 0, blockErr
+		}
+	}
 	defer func() {
 		if c == nil || c.logger == nil || order == nil {
 			return

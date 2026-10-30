@@ -69,6 +69,14 @@ func (d *AutomationDependencies) NewItemGreetingRepository() *ItemGreetingReposi
 	return NewItemGreetingRepository(d.store)
 }
 
+// NewBuyerBlockRepository 构造用户隔离的交易黑名单仓储，缺少工厂时返回 nil。
+func (d *AutomationDependencies) NewBuyerBlockRepository() *BuyerBlockRepository {
+	if d == nil {
+		return nil
+	}
+	return NewBuyerBlockRepository(d.store)
+}
+
 // NewKeywordRepository 创建关键词和指定商品回复适配器。
 func (d *AutomationDependencies) NewKeywordRepository() *KeywordRepository {
 	if d == nil {

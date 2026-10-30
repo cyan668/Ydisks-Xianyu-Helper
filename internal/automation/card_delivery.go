@@ -18,6 +18,10 @@ func (e *automationActionExecutor) sendCard(ctx context.Context, task Task, acti
 
 // sendCardWithProof 发送卡密并收集实际成功投递的文本或图片凭证，供同一运行的确认发货动作使用。
 func (e *automationActionExecutor) sendCardWithProof(ctx context.Context, task Task, action db.AutomationAction) (actionExecutionResult, error) {
+	// blockErr 也保护人工补取等直接调用，必须在读取或扣减库存前阻断。
+	if blockErr := e.ensureBuyerAllowed(ctx, task); blockErr != nil {
+		return actionExecutionResult{}, blockErr
+	}
 	if !actionMatchesOrderSpec(task, action) {
 		return actionExecutionResult{}, nil
 	}
@@ -50,7 +54,7 @@ func (e *automationActionExecutor) sendCardWithProof(ctx context.Context, task T
 	// i 表示当前卡密发送序号。
 	for i := 0; i < count; i++ {
 		// executionErr 阻止失权运行继续取下一份卡密，已发送的 proof 必须随错误返回。
-		if executionErr := checkRunExecution(ctx); executionErr != nil {
+		if executionErr := e.checkDeliveryExecution(ctx, task); executionErr != nil {
 			return actionExecutionResult{sent: sent, proof: proof}, executionErr
 		}
 
@@ -113,7 +117,7 @@ func (e *automationActionExecutor) sendAPICardWithProof(ctx context.Context, tas
 	// unitIndex 表示从 1 开始的当前 API 发货单位序号。
 	for unitIndex := 1; unitIndex <= count; unitIndex++ {
 		// executionErr 阻止失权运行继续取下一份卡密，已发送的 proof 必须随错误返回。
-		if executionErr := checkRunExecution(ctx); executionErr != nil {
+		if executionErr := e.checkDeliveryExecution(ctx, task); executionErr != nil {
 			return actionExecutionResult{sent: sent, proof: proof}, executionErr
 		}
 
@@ -163,7 +167,7 @@ func (e *automationActionExecutor) sendDataCardWithProof(ctx context.Context, ta
 	// i 表示当前数据卡密消费序号。
 	for i := 0; i < count; i++ {
 		// executionErr 阻止失权运行继续取下一份卡密，已发送的 proof 必须随错误返回。
-		if executionErr := checkRunExecution(ctx); executionErr != nil {
+		if executionErr := e.checkDeliveryExecution(ctx, task); executionErr != nil {
 			return actionExecutionResult{sent: sent, proof: proof}, executionErr
 		}
 
