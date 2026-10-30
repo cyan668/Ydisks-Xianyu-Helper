@@ -159,10 +159,11 @@ func (s *Service) FromOrder(ctx context.Context, userID int64, orderID, level, r
 	if err != nil {
 		return BatchResult{}, err
 	}
-	if level == "user" {
+	switch level {
+	case "user":
 		entry.CookieID = ""
 		entry.ItemID = ""
-	} else if level == "account" {
+	case "account":
 		entry.ItemID = ""
 	}
 	entry.Enabled = true
