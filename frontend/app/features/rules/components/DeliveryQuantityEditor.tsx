@@ -32,7 +32,7 @@ export default function DeliveryQuantityEditor({ index, variant, updateVariant }
     </label>}
     {variant.quantity_mode_error ? <p role="alert" className="md:col-span-full text-sm leading-6 text-red-600">{variant.quantity_mode_error}</p> : <p className="md:col-span-full text-sm leading-6 text-gray-500">
       {mode === 'per_order' ? '同一笔订单固定发送配置份数，不乘购买数量。' : '实际发货份数 = 购买数量 × 配置份数。'}
-      {variant.delivery_mode === 'template' ? ' 此策略应用于下方每个模板变量的卡密份数。' : ''}
+      {variant.delivery_mode === 'template' ? ' 此策略应用于每个模板变量的卡密份数。' : ''}
     </p>}
   </>;
 }
