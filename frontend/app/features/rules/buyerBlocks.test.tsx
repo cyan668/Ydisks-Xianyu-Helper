@@ -120,6 +120,14 @@ test('翻页清空选择，搜索回首页，导入报告去重，导出不丢�
   act(/* 用户明确重新选择当前页的一条记录。 */ () => hook.result.current.setSelected([1]));
   await act(/* 批量只提交所选集合。 */ async () => hook.result.current.batch('disable'));
   expect(batchBuyerBlocks).toHaveBeenCalledWith([1], 'disable', expect.any(Object));
+  expect(hook.result.current.message).toBe('已停用 1 条个人名单。');
+  expect(hook.result.current.hasError).toBe(false);
+  act(/* 每次重读后用户必须重新勾选当前页记录。 */ () => hook.result.current.setSelected([1]));
+  await act(/* 启用与删除分别显示当前动作，不能套用导入新增/跳过反馈。 */ async () => hook.result.current.batch('enable'));
+  expect(hook.result.current.message).toBe('已启用 1 条个人名单。');
+  act(/* 再次明确选择待删除的虚构记录。 */ () => hook.result.current.setSelected([1]));
+  await act(/* 删除结果只使用明确集合的实际处理数。 */ async () => hook.result.current.batch('delete'));
+  expect(hook.result.current.message).toBe('已删除 1 条个人名单。');
   vi.mocked(importBuyerBlocks).mockResolvedValue({ created: 3, skipped: 2, affected: 0 });
   // file 是只有测试文本的导入文件。
   const file = new File(['fixture'], 'fixture.csv');

@@ -58,8 +58,8 @@ export const useBuyerBlocks = (accountID: string) => {
     return /* 清理当前视图的读写请求；已经到达服务端的写入可能成功，返回后应重新查询。 */ () => { ++generation.current; controller.abort(); mutation.current?.abort(); mutation.current = null; };
   }, [accountID, epoch, page, search]);
 
-  /** run 串行执行 operation；成功关闭编辑器并重读，失败保留草稿。 */
-  const run = async (operation: (signal: AbortSignal) => Promise<unknown>, success = '操作已保存', reload = true): Promise<void> => {
+  /** run 串行执行 operation；success 按本次动作结果生成反馈，reload 决定是否关闭草稿并重读。 */
+  const run = async <T>(operation: (signal: AbortSignal) => Promise<T>, success: string | ((result: T) => string) = '操作已保存', reload = true): Promise<void> => {
     if (mutation.current) return;
     // current、key 捕获写入所属的视图与账号，晚到响应不能关闭其他草稿。
     const current = generation.current;
@@ -69,9 +69,9 @@ export const useBuyerBlocks = (accountID: string) => {
     const controller = new AbortController();
     mutation.current = controller; setBusy(true); setMessage(''); setHasError(false);
     try {
-      // result 是可选的导入结果，用于准确显示新增/重复跳过数量。
+      // result 保留当前动作的类型化结果，批量计数不能被误当作导入计数。
       const result = await operation(controller.signal);
-      if (current === generation.current && accountRef.current === key) { if (reload) { setDraft(null); setEpoch(/* value 递增读取代次。 */ value => value + 1); } setMessage(result && typeof result === 'object' && 'created' in result && 'skipped' in result ? `新增 ${result.created} 条，跳过 ${result.skipped} 条，重复记录保持原配置。` : success); }
+      if (current === generation.current && accountRef.current === key) { if (reload) { setDraft(null); setEpoch(/* value 递增读取代次。 */ value => value + 1); } setMessage(typeof success === 'function' ? success(result) : success); }
     } catch (/* error 为当前写入失败原因；不把取消或其他账号错误写入本视图。 */ error) {
       if (!controller.signal.aborted && current === generation.current && accountRef.current === key) { setHasError(true); setMessage(error instanceof Error ? error.message : '保存黑名单失败'); }
     } finally {
@@ -86,8 +86,8 @@ export const useBuyerBlocks = (accountID: string) => {
     refresh: /* 用户手动刷新当前筛选。 */ () => setEpoch(/* value 是当前重读计数。 */ value => value + 1),
     save: /* 保存当前草稿，服务端负责最终身份及归属校验。 */ () => draft ? run(/* signal 传给写入请求的取消器。 */ signal => saveBuyerBlock(draft, { signal })) : Promise.resolve(),
     remove: /* id 是用户确认删除的记录。 */ (id: number) => run(/* signal 控制删除请求。 */ signal => deleteBuyerBlock(id, { signal })),
-    batch: /* action 只作用于当前明确勾选主键，删除须由组件二次确认。 */ (action: 'enable' | 'disable' | 'delete') => run(/* signal 控制原子批量操作。 */ signal => batchBuyerBlocks(selected, action, { signal })),
-    importFile: /* file 为用户选择的原系统 XLSX/CSV 文件。 */ (file: File) => run(/* signal 控制上传并保持晚到隔离。 */ signal => importBuyerBlocks(file, { signal })),
+    batch: /* action 只作用于当前明确勾选主键，删除须由组件二次确认。 */ (action: 'enable' | 'disable' | 'delete') => run(/* signal 控制原子批量操作。 */ signal => batchBuyerBlocks(selected, action, { signal }), /* result 的 affected 是服务端实际处理数，不是新增数。 */ result => `已${{ enable: '启用', disable: '停用', delete: '删除' }[action]} ${result.affected} 条个人名单。`),
+    importFile: /* file 为用户选择的原系统 XLSX/CSV 文件。 */ (file: File) => run(/* signal 控制上传并保持晚到隔离。 */ signal => importBuyerBlocks(file, { signal }), /* result 只在文件导入时报告新增与重复跳过数。 */ result => `新增 ${result.created} 条，跳过 ${result.skipped} 条，重复记录保持原配置。`),
     exportFile: /* 导出不关闭未保存草稿、不改变筛选，也不请求平台。 */ () => run(/* signal 控制下载。 */ async signal => { const blob = await exportBuyerBlocks(accountID, { signal }); /* blob 是当前用户下载的配置文件。 */ if (!signal.aborted) downloadBlob(blob, '个人黑名单.csv'); }, '名单已导出', false),
   };
 };
