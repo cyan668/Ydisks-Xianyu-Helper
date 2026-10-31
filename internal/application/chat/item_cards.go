@@ -183,6 +183,7 @@ func (s *Service) SendItemCard(ctx context.Context, input ItemCardInput) (*Messa
 	// sendErr 表示平台商品卡片发送是否失败。
 	if sendErr := itemSender.SendItemCard(ctx, session.ChatID, session.PeerUserID, item, message.MessageKey); sendErr != nil {
 		if errors.Is(sendErr, ErrSendUncertain) {
+			_ = s.recordManualSend(ctx, session, message)
 			// statusCtx 和 statusCancel 为商品卡片未知结果状态收口提供独立窗口。
 			statusCtx, statusCancel := outgoingStatusContext(ctx)
 			// uncertain 保存商品卡片未知结果状态写入结果。
@@ -198,12 +199,15 @@ func (s *Service) SendItemCard(ctx context.Context, input ItemCardInput) (*Messa
 		return messagePointer(failed, message), fmt.Errorf("%w: %v", ErrSend, sendErr)
 	}
 	// statusCtx 和 statusCancel 是远端已成功后用于本地收口的有界上下文。
+	// takeoverErr 为人工商品卡片建立接管，不影响交易自动发货。
+	takeoverErr := s.recordManualSend(ctx, session, message)
+	// statusCtx、statusCancel 为已投递商品卡片的本地状态收口提供独立预算。
 	statusCtx, statusCancel := outgoingStatusContext(ctx)
 	// sent 和 statusErr 是最终 sent 消息及可能的本地写入错误。
 	sent, statusErr := s.outgoing.SetOutgoingStatus(statusCtx, accountID, message.MessageKey, "sent")
 	statusCancel()
-	if statusErr != nil {
-		return messagePointer(sent, message), fmt.Errorf("%w: %v", ErrStatusSave, statusErr)
+	if statusErr != nil || takeoverErr != nil {
+		return messagePointer(sent, message), fmt.Errorf("%w: %v", ErrStatusSave, errors.Join(statusErr, takeoverErr))
 	}
 	return messagePointer(sent, message), nil
 }

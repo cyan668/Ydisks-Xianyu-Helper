@@ -766,3 +766,9 @@ export const exportBuyerBlocks = async (accountID: string, options?: RequestCont
   const result = await contractClient.GET('/api/v1/buyer-blocks/export', { params: { query: { cookie_id: accountID || undefined } }, parseAs: 'blob', signal });
   return result as unknown as { /** data 是二进制文件。 */ data?: Blob; /** error 是统一错误。 */ error?: unknown; /** response 是 HTTP 元信息。 */ response: Response };
 }, options);
+
+/** getReplyProtection 只读取账号本地人工接管设置，停用账号也可配置。 */
+export const getReplyProtection = (accountID: string, options?: RequestControlOptions) => runContractRequest(/* signal 取消旧账号读取。 */ signal => contractClient.GET('/api/v1/chat/reply-protection', { params: { query: { account_id: accountID } }, signal }), options);
+
+/** saveReplyProtection 保存独立的人工接管分钟数，不触发账号启用或订单暂停。 */
+export const saveReplyProtection = (accountID: string, minutes: number, options?: RequestControlOptions) => runContractRequest(/* signal 取消反馈但不能撤回已提交配置。 */ signal => contractClient.PUT('/api/v1/chat/reply-protection', { body: { account_id: accountID, manual_pause_minutes: minutes }, signal }), options);

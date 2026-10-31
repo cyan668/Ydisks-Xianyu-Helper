@@ -233,3 +233,9 @@ export const markChatRead = async (accountId: string, chatId: string, messageIDs
 
 /** officialChatBlacklist 对明确会话执行一次官方查询/拉黑/解除，不遍历其他会话。 */
 export const officialChatBlacklist = (accountID: string, chatID: string, action: 'query' | 'add' | 'remove', options?: RequestControlOptions) => runContractRequest(/* signal 使切换会话后的结果失效，不自动重试平台操作。 */ signal => contractClient.POST('/api/v1/chat/{cookie_id}/{chat_id}/official-blacklist', { params: { path: { cookie_id: accountID, chat_id: chatID } }, body: { action }, signal }), options);
+
+/** getConversationReplyPause 只读本地接管状态，不请求平台或自动刷新联系人。 */
+export const getConversationReplyPause = (accountID: string, chatID: string, options?: RequestControlOptions) => runContractRequest(/* signal 取消旧会话本地读取。 */ signal => contractClient.GET('/api/v1/chat/reply-pause', { params: { query: { account_id: accountID, chat_id: chatID } }, signal }), options);
+
+/** resumeConversationReply 用已显示的状态版本恢复，冲突时须重新查询。 */
+export const resumeConversationReply = (accountID: string, chatID: string, expected: number, options?: RequestControlOptions) => runContractRequest(/* signal 只取消反馈，服务端仍比较当前版本。 */ signal => contractClient.POST('/api/v1/chat/reply-pause/resume', { body: { account_id: accountID, chat_id: chatID, expected_version: expected }, signal }), options);

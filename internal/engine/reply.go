@@ -70,6 +70,8 @@ type AIReplier interface {
 
 // ReplyMessage 是引擎生成并交给聊天应用的一条完整回复消息。
 type ReplyMessage struct {
+	// ObservedAt 保留买家消息原始接纳时间，手动恢复不允许旧生成结果补发。
+	ObservedAt int64
 	// AccountID 是回复所属账号标识。
 	AccountID string
 	// ChatID 是目标聊天会话标识。
@@ -135,6 +137,18 @@ func newReplyService(cookieID string, store *db.Store, delivery ReplyDelivery, a
 // Handle 收到一条聊天消息：先尝试商品首次回复，再按四级优先级回复。
 // 由 Account 在防抖后调用。返回是否产生了回复。
 func (r *ReplyService) Handle(ctx context.Context, m ChatMessage) error {
+	if m.ObservedAt <= 0 {
+		m.ObservedAt = time.Now().UnixMilli()
+	}
+	// paused、pauseErr 在调用 API、AI 或商品首次回复前停止已被人工接管的会话。
+	paused, pauseErr := r.replyPaused(ctx, m.ChatID, m.ObservedAt)
+	if pauseErr != nil {
+		return pauseErr
+	}
+	if paused {
+		r.logger.DebugContext(ctx, "人工接管期间跳过自动回复", "chat_id", m.ChatID)
+		return nil
+	}
 	// 商品首次回复失败只记录日志，不得阻断买家本条消息的正常回复链路。
 	r.handleItemGreeting(ctx, m)
 	// res 用于本次流程后续判断的响应
@@ -151,6 +165,9 @@ func (r *ReplyService) Handle(ctx context.Context, m ChatMessage) error {
 	started := time.Now()
 	// err 是本次回复投递失败的原因，非空时不输出成功摘要。
 	if err := r.deliver(ctx, m, res); err != nil {
+		if errors.Is(err, ErrReplyTakeover) {
+			return nil
+		}
 		return err
 	}
 	r.logger.InfoContext(ctx, "自动回复已发送", "reply_source", res.Source, "duration", time.Since(started).Round(time.Millisecond))
@@ -195,6 +212,14 @@ func (r *ReplyService) deliver(ctx context.Context, m ChatMessage, res *ReplyRes
 	if r.delivery == nil {
 		return nil
 	}
+	// paused、pauseErr 防止生成回复期间到达的人工消息穿透一次性领取与投递。
+	paused, pauseErr := r.replyPaused(ctx, m.ChatID, m.ObservedAt)
+	if pauseErr != nil {
+		return pauseErr
+	}
+	if paused {
+		return ErrReplyTakeover
+	}
 	// record 用于本次流程后续判断的record
 	record := db.DefaultReplyRecord{}
 	if res.ReplyOnce && m.ChatID != "" {
@@ -224,7 +249,7 @@ func (r *ReplyService) records(res *ReplyResult) onceRecordStore {
 // handleWithDelivery 把完整回复交给聊天应用，并把其分段结果同步到 reply_once 状态。
 func (r *ReplyService) handleWithDelivery(ctx context.Context, m ChatMessage, res *ReplyResult, record db.DefaultReplyRecord) error {
 	// message 保存本次仍需发送的完整回复；已成功的 reply_once 分段会被剔除。
-	message := ReplyMessage{AccountID: r.cookieID, ChatID: m.ChatID, ToUserID: m.SenderUserID, Text: res.Text, ImageURL: res.ImageURL}
+	message := ReplyMessage{ObservedAt: m.ObservedAt, AccountID: r.cookieID, ChatID: m.ChatID, ToUserID: m.SenderUserID, Text: res.Text, ImageURL: res.ImageURL}
 	if record.ImageSent {
 		message.ImageURL = ""
 	}

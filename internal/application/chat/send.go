@@ -305,9 +305,15 @@ func (s *Service) SendText(ctx context.Context, input OutgoingInput) (*Message, 
 	if s == nil || s.outgoing == nil || s.senders == nil {
 		return nil, ErrUnavailable
 	}
+	if err := s.checkAutomaticReply(ctx, session); err != nil { // err 阻止接管中的自动文本进入发送管线。
+		return nil, err
+	}
 	// unlockOperation 阻止同一会话的本地删除在平台发送和状态收口之间穿插执行。
 	unlockOperation := s.sessionOperations.lock(session.AccountID, session.ChatID)
 	defer unlockOperation()
+	if err := s.checkAutomaticReply(ctx, session); err != nil { // err 核验等待人工发送锁之后的最新接管。
+		return nil, err
+	}
 	// sender 和 ok 保存目标账号的在线发送句柄及存在性。
 	sender, ok := s.senders.Sender(session.AccountID)
 	if !ok || sender == nil {
@@ -318,9 +324,17 @@ func (s *Service) SendText(ctx context.Context, input OutgoingInput) (*Message, 
 	if err != nil {
 		return nil, fmt.Errorf("保存待发送消息失败: %w", err)
 	}
+	if err := s.checkAutomaticReply(ctx, session); err != nil { // err 防止本地消息写入期间到达的接管穿透。
+		// statusCtx、cancel 收口确定未发送的本地消息，不能让前端一直显示发送中。
+		statusCtx, cancel := outgoingStatusContext(ctx)
+		defer cancel()
+		_, _ = s.outgoing.SetOutgoingStatus(statusCtx, session.AccountID, message.MessageKey, "failed")
+		return nil, err
+	}
 	// sendErr 表示平台文字发送失败；失败分支会补写本地 failed 状态。
 	if sendErr := sender.SendText(ctx, session.ChatID, session.PeerUserID, text, message.MessageKey); sendErr != nil {
 		if errors.Is(sendErr, ErrSendUncertain) {
+			_ = s.recordManualSend(ctx, session, message)
 			// statusCtx 和 statusCancel 为未知结果状态收口提供独立五秒窗口。
 			statusCtx, statusCancel := outgoingStatusContext(ctx)
 			// uncertain 保存本地未知结果状态写入结果。
@@ -336,12 +350,15 @@ func (s *Service) SendText(ctx context.Context, input OutgoingInput) (*Message, 
 		return messagePointer(failed, message), fmt.Errorf("%w: %v", ErrSend, sendErr)
 	}
 	// sent 和 err 保存平台发送成功后的本地状态及状态持久化错误。
+	// takeoverErr 在发布 sent 事件前保存人工接管，前端收到更新后读取到的就是最新暂停。
+	takeoverErr := s.recordManualSend(ctx, session, message)
+	// statusCtx、statusCancel 为已完成平台投递的本地状态收口提供独立预算。
 	statusCtx, statusCancel := outgoingStatusContext(ctx)
 	// sent 和 err 保存平台已确认投递后的本地 sent 状态与可能的状态收口错误。
 	sent, err := s.outgoing.SetOutgoingStatus(statusCtx, session.AccountID, message.MessageKey, "sent")
 	statusCancel()
-	if err != nil {
-		return messagePointer(sent, message), fmt.Errorf("%w: %v", ErrStatusSave, err)
+	if err != nil || takeoverErr != nil {
+		return messagePointer(sent, message), fmt.Errorf("%w: %v", ErrStatusSave, errors.Join(err, takeoverErr))
 	}
 	return messagePointer(sent, message), nil
 }
@@ -355,6 +372,9 @@ func (s *Service) SendImage(ctx context.Context, input ImageInput) (*Message, er
 	}
 	if s == nil || s.outgoing == nil || s.senders == nil || s.uploader == nil {
 		return nil, ErrUnavailable
+	}
+	if err := s.checkAutomaticReply(ctx, session); err != nil { // err 阻止接管中的自动图片上传或发送。
+		return nil, err
 	}
 	if len(input.Data) == 0 {
 		return nil, ErrSendInvalidInput
@@ -375,6 +395,9 @@ func (s *Service) SendImage(ctx context.Context, input ImageInput) (*Message, er
 	if strings.TrimSpace(upload.URL) == "" {
 		return nil, fmt.Errorf("%w: 图片上传未返回地址", ErrSend)
 	}
+	if err := s.checkAutomaticReply(ctx, session); err != nil { // err 拦住上传期间到达的人工接管。
+		return nil, err
+	}
 	// message 和 err 保存图片待发送消息及本地写入错误。
 	message, err := s.outgoing.CreateOutgoingMedia(ctx, session, "image", upload.URL)
 	if err != nil {
@@ -383,6 +406,7 @@ func (s *Service) SendImage(ctx context.Context, input ImageInput) (*Message, er
 	// sendErr 表示平台图片发送失败；失败分支会补写本地 failed 状态。
 	if sendErr := sender.SendImage(ctx, session.ChatID, session.PeerUserID, upload.URL, 0, upload.Width, upload.Height, message.MessageKey); sendErr != nil {
 		if errors.Is(sendErr, ErrSendUncertain) {
+			_ = s.recordManualSend(ctx, session, message)
 			// statusCtx 和 statusCancel 为图片未知结果状态收口提供独立窗口。
 			statusCtx, statusCancel := outgoingStatusContext(ctx)
 			// uncertain 保存图片消息未知结果状态写入结果。
@@ -398,12 +422,15 @@ func (s *Service) SendImage(ctx context.Context, input ImageInput) (*Message, er
 		return messagePointer(failed, message), fmt.Errorf("%w: %v", ErrSend, sendErr)
 	}
 	// sent 和 err 保存图片发送成功后的本地状态及状态持久化错误。
+	// takeoverErr 先持久化人工图片的接管，再广播最终消息状态。
+	takeoverErr := s.recordManualSend(ctx, session, message)
+	// statusCtx、statusCancel 为已完成图片投递的本地状态收口提供独立预算。
 	statusCtx, statusCancel := outgoingStatusContext(ctx)
 	// sent 和 err 保存平台图片已确认投递后的本地 sent 状态与可能的状态收口错误。
 	sent, err := s.outgoing.SetOutgoingStatus(statusCtx, session.AccountID, message.MessageKey, "sent")
 	statusCancel()
-	if err != nil {
-		return messagePointer(sent, message), fmt.Errorf("%w: %v", ErrStatusSave, err)
+	if err != nil || takeoverErr != nil {
+		return messagePointer(sent, message), fmt.Errorf("%w: %v", ErrStatusSave, errors.Join(err, takeoverErr))
 	}
 	return messagePointer(sent, message), nil
 }

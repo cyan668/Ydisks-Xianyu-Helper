@@ -172,7 +172,7 @@ func (s chatSender) SendText(ctx context.Context, chatID, toUserID, text, messag
 	if s.sender == nil {
 		return chatapp.ErrUnavailable
 	}
-	return classifyChatPlatformError(s.sender.SendText(engine.WithOutgoingMessageKey(ctx, messageKey), chatID, toUserID, text))
+	return classifyChatPlatformError(s.sender.SendText(chatOutgoingContext(ctx, messageKey), chatID, toUserID, text))
 }
 
 // SendImage 发送图片并将应用层幂等键传递给运行时接口。
@@ -180,7 +180,7 @@ func (s chatSender) SendImage(ctx context.Context, chatID, toUserID, imageURL st
 	if s.sender == nil {
 		return chatapp.ErrUnavailable
 	}
-	return classifyChatPlatformError(s.sender.SendImage(engine.WithOutgoingMessageKey(ctx, messageKey), chatID, toUserID, imageURL, cardID, width, height))
+	return classifyChatPlatformError(s.sender.SendImage(chatOutgoingContext(ctx, messageKey), chatID, toUserID, imageURL, cardID, width, height))
 }
 
 // SendItemCard 将应用层商品快照交给账号运行时的可选卡片发送能力。
@@ -195,7 +195,7 @@ func (s chatSender) SendItemCard(ctx context.Context, chatID, toUserID string, i
 	if !ok {
 		return chatapp.ErrUnavailable
 	}
-	return classifyChatPlatformError(itemSender.SendItemCard(engine.WithOutgoingMessageKey(ctx, messageKey), chatID, toUserID, item.ItemID, item.Title, item.ImageURL, item.Price))
+	return classifyChatPlatformError(itemSender.SendItemCard(chatOutgoingContext(ctx, messageKey), chatID, toUserID, item.ItemID, item.Title, item.ImageURL, item.Price))
 }
 
 // chatReplyDelivery 将引擎生成的完整回复转交给聊天应用服务，不自行上传图片或拼装协议尺寸。
@@ -215,7 +215,7 @@ func (d chatReplyDelivery) SendReply(ctx context.Context, message engine.ReplyMe
 		return engine.ReplySendResult{}, chatapp.ErrUnavailable
 	}
 	// sent、sendErr 保存聊天应用统一发送结果及错误。
-	sent, sendErr := d.service.SendReply(ctx, chatapp.ReplyInput{
+	sent, sendErr := d.service.SendReply(chatapp.WithAutomaticReplyAt(ctx, message.ObservedAt), chatapp.ReplyInput{
 		Session: chatapp.Session{AccountID: message.AccountID, ChatID: message.ChatID, PeerUserID: message.ToUserID},
 		Text:    message.Text, ImageURL: message.ImageURL,
 	})
@@ -226,6 +226,9 @@ func (d chatReplyDelivery) SendReply(ctx context.Context, message engine.ReplyMe
 		result.TextSent = sent.TextSent
 	}
 	result.Uncertain = errors.Is(sendErr, chatapp.ErrSendUncertain) || errors.Is(sendErr, chatapp.ErrStatusSave)
+	if errors.Is(sendErr, chatapp.ErrReplyPaused) {
+		return result, engine.ErrReplyTakeover
+	}
 	return result, sendErr
 }
 

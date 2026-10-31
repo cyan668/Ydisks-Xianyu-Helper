@@ -439,6 +439,7 @@ func extractOwnWebSocketEcho(decrypted map[string]any, accountID, cookieStr stri
 		MessageKey:  extractMessageID(decrypted),
 		MessageType: messageType,
 		Content:     content,
+		SentAt:      outgoingEchoSentAt(m1),
 	}
 }
 
