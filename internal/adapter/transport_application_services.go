@@ -7,6 +7,7 @@ import (
 	adminapp "xianyu-go/internal/application/admin"
 	analyticsapp "xianyu-go/internal/application/analytics"
 	automationapp "xianyu-go/internal/application/automation"
+	blockapp "xianyu-go/internal/application/buyerblock"
 	cardsapp "xianyu-go/internal/application/cards"
 	defaultreplyapp "xianyu-go/internal/application/defaultreply"
 	deliveryapp "xianyu-go/internal/application/deliverytemplate"
@@ -37,6 +38,8 @@ type TransportApplicationServiceOptions struct {
 	OutboundPolicy settingsapp.OutboundPolicy
 	// RuntimeLogSource 提供进程内已脱敏运行日志的只读来源；为空时查询返回空页。
 	RuntimeLogSource logsapp.Reader
+	// BuyerBlockPlatform 为可选逐会话平台端口；旧离线构造仍支持本地黑名单管理。
+	BuyerBlockPlatform blockapp.OfficialPlatform
 }
 
 // TransportApplicationServices 是由进程组合根一次性构造并注入 Server 的应用服务集合。
@@ -72,6 +75,8 @@ type TransportApplicationServices struct {
 	DefaultReplies *defaultreplyapp.Service
 	// ItemGreetings 提供商品首次回复规则用例。
 	ItemGreetings *itemgreetingapp.Service
+	// BuyerBlocks 提供交易黑名单管理用例。
+	BuyerBlocks *blockapp.Service
 	// Keywords 提供关键词和指定商品回复规则用例。
 	Keywords *keywordsapp.Service
 	// RuntimeLogs 提供管理员运行日志查询用例。
@@ -117,6 +122,7 @@ func NewTransportApplicationServices(options TransportApplicationServiceOptions)
 		PublishAutomationRules: automationapp.NewPublishRuleService(automationRepository),
 		DefaultReplies:         defaultreplyapp.NewService(options.AutomationDependencies.NewDefaultReplyRepository()),
 		ItemGreetings:          itemgreetingapp.NewService(options.AutomationDependencies.NewItemGreetingRepository()),
+		BuyerBlocks:            blockapp.NewServiceWithPlatform(options.AutomationDependencies.NewBuyerBlockRepository(), options.BuyerBlockPlatform),
 		Keywords:               keywordsapp.NewService(options.AutomationDependencies.NewKeywordRepository()),
 		RuntimeLogs:            logsapp.NewService(options.RuntimeLogSource),
 	}
@@ -132,7 +138,7 @@ func (services *TransportApplicationServices) Validate() error {
 	if services == nil {
 		return fmt.Errorf("transport 应用服务集合不能为空")
 	}
-	if services.Settings == nil || services.Admin == nil || services.AccountTasks == nil || services.UncertainNotifications == nil || services.NotificationChannels == nil || services.Analytics == nil || services.AutomationIssues == nil || services.AutomationAudit == nil || services.AutomationRules == nil || services.DeliveryTemplates == nil || services.Cards == nil || services.APICardTester == nil || services.PublishAutomationRules == nil || services.DefaultReplies == nil || services.ItemGreetings == nil || services.Keywords == nil || services.RuntimeLogs == nil {
+	if services.Settings == nil || services.Admin == nil || services.AccountTasks == nil || services.UncertainNotifications == nil || services.NotificationChannels == nil || services.Analytics == nil || services.AutomationIssues == nil || services.AutomationAudit == nil || services.AutomationRules == nil || services.DeliveryTemplates == nil || services.Cards == nil || services.APICardTester == nil || services.PublishAutomationRules == nil || services.DefaultReplies == nil || services.ItemGreetings == nil || services.BuyerBlocks == nil || services.Keywords == nil || services.RuntimeLogs == nil {
 		return fmt.Errorf("transport 应用服务集合存在未装配服务")
 	}
 	return nil

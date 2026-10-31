@@ -429,6 +429,8 @@ func deleteCookieTx(ctx context.Context, tx *sql.Tx, cookieID string) error {
 		"item_greeting_records",
 		"item_greeting_rule_items",
 		"item_greeting_rules",
+		"buyer_blocks",
+		"buyer_block_closes",
 		"scheduled_cookies_refresh_log",
 		"scheduled_login_renew_log",
 		"scheduled_api_cookie_renew_log",

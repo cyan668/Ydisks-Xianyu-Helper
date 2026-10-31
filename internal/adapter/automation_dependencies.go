@@ -1,7 +1,9 @@
 package adapter
 
 import (
+	"context"
 	"errors"
+	"xianyu-go/internal/xianyu/mtop"
 
 	"xianyu-go/internal/db"
 )
@@ -67,6 +69,19 @@ func (d *AutomationDependencies) NewItemGreetingRepository() *ItemGreetingReposi
 		return nil
 	}
 	return NewItemGreetingRepository(d.store)
+}
+
+// NewBuyerBlockRepository 构造用户隔离的交易黑名单仓储，缺少工厂时返回 nil。
+func (d *AutomationDependencies) NewBuyerBlockRepository() *BuyerBlockRepository {
+	if d == nil {
+		return nil
+	}
+	return NewBuyerBlockRepository(d.store)
+}
+
+// NewBuyerBlockPlatform 构造逐会话平台能力，client 必须由既有组合根提供的受节流 MTOP 客户端。
+func (d *AutomationDependencies) NewBuyerBlockPlatform(client mtop.Client, update func(context.Context, string, string)) *BuyerBlockPlatform {
+	return &BuyerBlockPlatform{runtime: NewOrderRuntime(d.store, OrderRuntimeHooks{Client: func() mtop.Client { return client }, UpdateRunningCookie: update}, nil, nil)}
 }
 
 // NewKeywordRepository 创建关键词和指定商品回复适配器。

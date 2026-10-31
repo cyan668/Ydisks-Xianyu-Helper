@@ -99,7 +99,9 @@ export default defineConfig({
           // 规则安全确认和异常处置控件共用独立静态分片，控制规则主页面体积并保留集中审计入口。
           if (
             modulePath.includes('/app/features/rules/components/AllItemsConfirmation.') ||
-            modulePath.includes('/app/features/rules/components/AutomationIssuePanel.')
+            modulePath.includes('/app/features/rules/components/AutomationIssuePanel.') ||
+            modulePath.includes('/app/features/rules/components/BuyerBlockPanel.') ||
+            modulePath.includes('/app/features/rules/buyerBlock')
           ) {
             return 'rules-safety-controls';
           }

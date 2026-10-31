@@ -49,6 +49,10 @@ type templateDeliveryState struct {
 
 // sendTemplate 预留模板变量对应的卡密内容，渲染每条消息后按模板顺序发送并返回确认发货凭证。
 func (e *automationActionExecutor) sendTemplate(ctx context.Context, task Task, action db.AutomationAction) (actionExecutionResult, error) {
+	// blockErr 在模板变量读取和 API 取卡之前核验黑名单。
+	if blockErr := e.ensureBuyerAllowed(ctx, task); blockErr != nil {
+		return actionExecutionResult{}, blockErr
+	}
 	if !actionMatchesOrderSpec(task, action) {
 		return actionExecutionResult{}, nil
 	}
@@ -65,7 +69,7 @@ func (e *automationActionExecutor) sendTemplate(ctx context.Context, task Task, 
 	result.proof.expectedUnits = len(action.TemplateMessages)
 	for /* messageIndex、message 分别表示模板消息的零基位置和当前待渲染内容。 */ messageIndex, message := range action.TemplateMessages {
 		// executionErr 在加载下一条模板变量之前复核执行权，防止旧动作继续消费卡密。
-		if executionErr := checkRunExecution(ctx); executionErr != nil {
+		if executionErr := e.checkDeliveryExecution(ctx, task); executionErr != nil {
 			return result, executionErr
 		}
 
@@ -225,7 +229,7 @@ func (e *automationActionExecutor) loadTemplateBatchLines(ctx context.Context, t
 	reservations := make([]templateCardReservation, 0, binding.count)
 	for /* index 表示批量卡密消费的序号。 */ index := 0; index < binding.count; index++ {
 		// executionErr 在同一模板变量的每份库存消费前复核执行权，保留此前预留供补偿。
-		if executionErr := checkRunExecution(ctx); executionErr != nil {
+		if executionErr := e.checkDeliveryExecution(ctx, task); executionErr != nil {
 			return lines, reservations, false, false, false, false, executionErr
 		}
 		// unlock 保存当前卡密组的并发保护释放函数。
@@ -251,7 +255,7 @@ func (e *automationActionExecutor) loadTemplateAPILines(ctx context.Context, tas
 	apiFetched := false
 	for /* unitIndex 表示当前 API 卡密变量从 1 开始的取卡单位序号。 */ unitIndex := 1; unitIndex <= binding.count; unitIndex++ {
 		// executionErr 防止同一变量的慢速 API 批次在失权后继续请求；已取得单位保持未知结果保护。
-		if executionErr := checkRunExecution(ctx); executionErr != nil {
+		if executionErr := e.checkDeliveryExecution(ctx, task); executionErr != nil {
 			return lines, nil, apiFetched, true, false, false, executionErr
 		}
 		// fetched、fetchErr 保存当前模板变量 API 取卡结果及请求错误。

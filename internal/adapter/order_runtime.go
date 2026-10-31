@@ -154,6 +154,24 @@ func (r *OrderRuntime) consignWithCurrentCookie(ctx context.Context, cookieID, o
 	if r == nil || r.store == nil || r.store.Cookies == nil {
 		return false, nil, "", false, errors.New("订单凭证存储未初始化")
 	}
+	if r.store.BuyerBlocks != nil {
+		// owned、ownerErr 在读取黑名单前核验非敏感账号归属，越权调用不能获知交易保护状态。
+		owned, ownerErr := r.store.Cookies.ExistsOwned(ctx, userID, cookieID)
+		if ownerErr != nil {
+			return false, nil, "", false, ownerErr
+		}
+		if !owned {
+			return false, nil, "", false, orderapp.ErrForbidden
+		}
+		// blocked、blockErr 从同账号本地订单恢复买家身份，保护“仅确认发货”入口。
+		blocked, blockErr := r.store.BuyerBlocks.MatchOrder(ctx, cookieID, orderID, "", "")
+		if blockErr != nil {
+			return false, nil, "", false, blockErr
+		}
+		if blocked != nil {
+			return false, nil, "", false, errors.New("买家在交易黑名单中，已阻止确认发货")
+		}
+	}
 	// unlock 保护当前账号凭证读取；平台确认发货开始前必须释放账号锁。
 	unlock := r.store.LockAccountCredentials(cookieID)
 	// detail、loadErr 保存按账号读取的平台运行凭证及错误。

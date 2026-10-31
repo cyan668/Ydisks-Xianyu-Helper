@@ -12,6 +12,18 @@ func (s *Server) mountVersionedReplyRoutes(r chi.Router) {
 		r.Use(s.Auth.Middleware)
 		r.Use(auth.RequireAuth)
 
+		// 交易黑名单管理与平台会话拉黑分离，所有记录按本地用户隔离。
+		r.Get("/api/v1/buyer-blocks", s.listBuyerBlocks)
+		r.Post("/api/v1/buyer-blocks", s.saveBuyerBlock)
+		r.Get("/api/v1/buyer-blocks/page", s.pageBuyerBlocks)
+		r.Post("/api/v1/buyer-blocks/batch", s.batchBuyerBlocks)
+		r.Post("/api/v1/buyer-blocks/import", s.importBuyerBlocks)
+		r.Get("/api/v1/buyer-blocks/export", s.exportBuyerBlocks)
+		r.Post("/api/v1/orders/{order_id}/buyer-block", s.buyerBlockFromOrder)
+		r.Post("/api/v1/chat/{cookie_id}/{chat_id}/official-blacklist", s.officialBuyerBlock)
+		r.Put("/api/v1/buyer-blocks/{id}", s.saveBuyerBlock)
+		r.Delete("/api/v1/buyer-blocks/{id}", s.deleteBuyerBlock)
+
 		// 指定商品回复使用独立资源前缀，避免与账号级关键词规则混淆。
 		r.Get("/api/v1/reply-rules/items", s.listItemReplies)
 		r.Get("/api/v1/reply-rules/items/{cookie_id}/{item_id}", s.getItemReply)

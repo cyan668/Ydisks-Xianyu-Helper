@@ -6,6 +6,444 @@ info:
 servers:
   - url: /
 paths:
+  /api/v1/buyer-blocks/page:
+    get:
+      operationId: pageBuyerBlocks
+      summary: 分页搜索个人交易黑名单
+      security: [{cookieAuth: []}]
+      parameters:
+        - {name: cookie_id, in: query, schema: {type: string}}
+        - {name: search, in: query, schema: {type: string}}
+        - {name: page, in: query, schema: {type: integer, minimum: 1}}
+        - {name: page_size, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BuyerBlockPageResponse'}
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '503':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+  /api/v1/buyer-blocks/batch:
+    post:
+      operationId: batchBuyerBlocks
+      summary: 原子启用停用或删除明确选择的个人名单
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BuyerBlockBatchRequest'}
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BuyerBlockBatchResponse'}
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '503':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+  /api/v1/orders/{order_id}/buyer-block:
+    post:
+      operationId: buyerBlockFromOrder
+      summary: 从本人订单一键加入个人名单，不操作平台
+      security: [{cookieAuth: []}]
+      parameters:
+        - {name: order_id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BuyerBlockOrderRequest'}
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BuyerBlockBatchResponse'}
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '503':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+  /api/v1/buyer-blocks/import:
+    post:
+      operationId: importBuyerBlocks
+      summary: 导入原系统 XLSX 或本系统 CSV，重复跳过不覆盖
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BuyerBlockBatchResponse'}
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '503':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+  /api/v1/buyer-blocks/export:
+    get:
+      operationId: exportBuyerBlocks
+      summary: 导出本人个人黑名单 CSV（UTF-8 BOM）
+      security: [{cookieAuth: []}]
+      parameters:
+        - {name: cookie_id, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: CSV 文件
+          content:
+            text/csv:
+              schema: {type: string, format: binary}
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '503':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+  /api/v1/chat/{cookie_id}/{chat_id}/official-blacklist:
+    post:
+      operationId: officialBuyerBlock
+      summary: 按明确会话查询加入或解除闲鱼官方黑名单，每次一次平台请求
+      security: [{cookieAuth: []}]
+      parameters:
+        - {name: cookie_id, in: path, required: true, schema: {type: string}}
+        - {name: chat_id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BuyerBlockOfficialRequest'}
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BuyerBlockOfficialResponse'}
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '503':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+  /api/v1/buyer-blocks:
+    get:
+      operationId: listBuyerBlocks
+      summary: 查询当前用户的交易黑名单
+      security: [{cookieAuth: []}]
+      parameters:
+        - {name: cookie_id, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/BuyerBlockResponse'}}
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+    post:
+      operationId: createBuyerBlock
+      summary: 新增交易黑名单
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BuyerBlockRequest'}
+      responses:
+        '201':
+          description: 成功
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BuyerBlockResponse'}
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+  /api/v1/buyer-blocks/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: integer, minimum: 1}}
+    put:
+      operationId: updateBuyerBlock
+      summary: 更新交易黑名单
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BuyerBlockRequest'}
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BuyerBlockResponse'}
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+    delete:
+      operationId: deleteBuyerBlock
+      summary: 删除交易黑名单，不清除历史关单占用
+      security: [{cookieAuth: []}]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OperationResponse'}
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '404':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '409':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
   "/api/v1/account-tasks/{cid}":
     get:
       operationId: getApiV1AccountTasksBycid
@@ -8381,6 +8819,66 @@ components:
       in: cookie
       name: session
   schemas:
+    BuyerBlockPageResponse:
+      type: object
+      required: [data,total,page,page_size]
+      properties:
+        data: {type: array, items: {$ref: '#/components/schemas/BuyerBlockResponse'}}
+        total: {type: integer}
+        page: {type: integer}
+        page_size: {type: integer}
+    BuyerBlockBatchResponse:
+      type: object
+      required: [created,skipped,affected]
+      properties:
+        created: {type: integer}
+        skipped: {type: integer}
+        affected: {type: integer}
+    BuyerBlockBatchRequest:
+      type: object
+      required: [ids,action]
+      properties:
+        ids: {type: array, minItems: 1, maxItems: 500, items: {type: integer, minimum: 1}}
+        action: {type: string, enum: [enable,disable,delete]}
+    BuyerBlockOrderRequest:
+      type: object
+      required: [level]
+      properties:
+        level: {type: string, enum: [user,account,item]}
+        reason: {type: string, maxLength: 500}
+    BuyerBlockOfficialRequest:
+      type: object
+      required: [action]
+      properties:
+        action: {type: string, enum: [query,add,remove]}
+    BuyerBlockOfficialResponse:
+      type: object
+      required: [blocked]
+      properties:
+        blocked: {type: boolean}
+    BuyerBlockRequest:
+      type: object
+      required: [buyer_id, enabled, auto_close]
+      properties:
+        cookie_id: {type: string, description: '空表示当前用户全部账号'}
+        item_id: {type: string, description: '空表示全部商品；商品级必须指定账号'}
+        buyer_id: {type: string, description: '稳定买家ID，可带 @goofish；不按昵称匹配'}
+        buyer_nick: {type: string, maxLength: 100}
+        reason: {type: string, maxLength: 500}
+        enabled: {type: boolean}
+        auto_close: {type: boolean, description: '命中卖家订单系统事件时最多尝试一次关单；失败仍不发卡'}
+    BuyerBlockResponse:
+      type: object
+      required: [id, cookie_id, item_id, buyer_id, reason, enabled, auto_close]
+      properties:
+        id: {type: integer}
+        cookie_id: {type: string, description: '空表示当前用户全部账号'}
+        item_id: {type: string, description: '空表示全部商品；商品级必须指定账号'}
+        buyer_id: {type: string, description: '稳定买家ID，可带 @goofish；不按昵称匹配'}
+        buyer_nick: {type: string, maxLength: 100}
+        reason: {type: string, maxLength: 500}
+        enabled: {type: boolean}
+        auto_close: {type: boolean, description: '命中卖家订单系统事件时最多尝试一次关单；失败仍不发卡'}
     ApiResponse:
       type: object
       required: [success]

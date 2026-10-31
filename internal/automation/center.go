@@ -386,6 +386,10 @@ func (c *Center) handleTask(ctx context.Context, task Task) (bool, error) {
 			return false, nil
 		}
 	}
+	// blocked、blockErr 在规则执行前拦截交易；只对明确授权的系统事件尝试一次关单。
+	if blocked, blockErr := c.handleBlockedBuyer(ctx, task); blocked || blockErr != nil {
+		return false, blockErr
+	}
 	// aiPricingActive 表示订单创建事件已由互斥的 AI 议价模式接管；aiPricingErr 是报价执行或状态收口错误。
 	if aiPricingActive, aiPricingErr := c.handleAIPricingMode(ctx, task); aiPricingActive || aiPricingErr != nil {
 		return false, aiPricingErr

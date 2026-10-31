@@ -230,3 +230,6 @@ export const markChatRead = async (accountId: string, chatId: string, messageIDs
     body: { account_id: accountId, chat_id: chatId, message_ids: messageIDs.map(/* receipt 是当前待序列化的平台已读回执。 */ receipt => ({ messageId: receipt.messageId, sessionId: receipt.sessionId, cid: receipt.cid, conversationType: receipt.conversationType })) },
     signal,
   }), options);
+
+/** officialChatBlacklist 对明确会话执行一次官方查询/拉黑/解除，不遍历其他会话。 */
+export const officialChatBlacklist = (accountID: string, chatID: string, action: 'query' | 'add' | 'remove', options?: RequestControlOptions) => runContractRequest(/* signal 使切换会话后的结果失效，不自动重试平台操作。 */ signal => contractClient.POST('/api/v1/chat/{cookie_id}/{chat_id}/official-blacklist', { params: { path: { cookie_id: accountID, chat_id: chatID } }, body: { action }, signal }), options);
