@@ -33,6 +33,8 @@ type messageDispatcher struct {
 	currentHandler func() Handler
 	// observeOutgoing 将账号自身回显交给账号级发送确认器；回调不得执行不可控外部 I/O。
 	observeOutgoing func(OutgoingChatMessage)
+	// classifyOutgoing 仅附加可信来源，不参与自动化发送确认。
+	classifyOutgoing func(OutgoingChatMessage) OutgoingChatMessage
 	// reply 负责自动回复链，可能为空。
 	reply *ReplyService
 	// logger 记录消息分发和防抖错误。
@@ -53,6 +55,8 @@ type messageDispatcherConfig struct {
 	CurrentHandler func() Handler
 	// ObserveOutgoing 接收账号自身 WebSocket 回显，供自动化发送确认使用。
 	ObserveOutgoing func(OutgoingChatMessage)
+	// ClassifyOutgoing 区分本地自动消息与官方客户端的人工实时消息。
+	ClassifyOutgoing func(OutgoingChatMessage) OutgoingChatMessage
 	// Reply 是自动回复服务。
 	Reply *ReplyService
 	// Logger 记录分发过程中的错误和诊断信息。
@@ -101,17 +105,18 @@ func newMessageDispatcher(config messageDispatcherConfig) messageDispatcher {
 		observeOutgoing = func(OutgoingChatMessage) {}
 	}
 	return messageDispatcher{
-		processed:       make(map[string]time.Time),
-		debounceTimers:  make(map[string]*debounceEntry),
-		sem:             make(chan struct{}, MessageSemaphoreSize),
-		cookieID:        config.CookieID,
-		currentCookie:   currentCookie,
-		currentHandler:  currentHandler,
-		observeOutgoing: observeOutgoing,
-		reply:           config.Reply,
-		logger:          logger,
-		beginTask:       beginTask,
-		recordMessage:   recordMessage,
+		processed:        make(map[string]time.Time),
+		debounceTimers:   make(map[string]*debounceEntry),
+		sem:              make(chan struct{}, MessageSemaphoreSize),
+		cookieID:         config.CookieID,
+		currentCookie:    currentCookie,
+		currentHandler:   currentHandler,
+		observeOutgoing:  observeOutgoing,
+		classifyOutgoing: config.ClassifyOutgoing,
+		reply:            config.Reply,
+		logger:           logger,
+		beginTask:        beginTask,
+		recordMessage:    recordMessage,
 	}
 }
 
@@ -205,6 +210,9 @@ func (d *messageDispatcher) handleMessageContext(ctx context.Context, decrypted 
 		ownEcho.ObservedAt = observedAt
 		// observeOutgoing 先于业务旁路执行，确保等待中的自动化发送不受数据库写入延迟影响。
 		d.observeOutgoing(*ownEcho)
+		if d.classifyOutgoing != nil {
+			*ownEcho = d.classifyOutgoing(*ownEcho)
+		}
 		// handler 保存当前可选业务处理器；旧集成未实现出站观察能力时保持原有仅过滤语义。
 		if handler := d.currentHandler(); handler != nil {
 			// observer、supported 保存出站观察接口及其实现判断，避免扩大基础 Handler 的必选职责。

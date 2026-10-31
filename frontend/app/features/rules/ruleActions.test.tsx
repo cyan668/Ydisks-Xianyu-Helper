@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { afterEach,beforeEach,describe,expect,test,vi } from 'vitest';
 import { clearDefaultReplyRecords,deleteDefaultReply,deleteReplyRule,deleteShippingRule,getDefaultReply,resolveAutomationRun,resolveDeferredAutomationTask,updateDefaultReply,updateReplyRule,updateShippingRule } from './api';
 import { useRuleActions,type RuleActionsOptions } from './ruleActions';
-import type { Card,DefaultReply,Item,ShippingRule } from './types';
+import type { Card,DefaultReply,Item,ShippingRule,RulesTab } from './types';
 
 vi.mock('./api', /* ruleActionsApiMockFactory 提供规则动作 Hook 的确定性 API 替身。 */ () => ({
   clearDefaultReplyRecords: vi.fn(),
@@ -55,7 +55,7 @@ const useRuleActionsHarness = () => {
   // selectedAccountId 保存测试中的当前账号。
   const [selectedAccountId, setSelectedAccountId] = useState('account-1');
   // activeTab 保存测试中的当前页签。
-  const [, setActiveTab] = useState<'automation' | 'reply' | 'default' | 'greeting' | 'blocks' | 'logs'>('automation');
+  const [, setActiveTab] = useState<RulesTab>('automation');
   // items 保存测试中的商品参考数据。
   const [items] = useState<Item[]>([itemFixture]);
   // automationRules 保存外部联动写入的规则列表。

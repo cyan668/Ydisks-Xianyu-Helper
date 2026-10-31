@@ -20,6 +20,8 @@ type outgoingMessageCoordinator struct {
 	account *Account
 	// echoTracker 保存当前账号自动化消息的自身回显等待项；它不参与数据库写入或平台 I/O。
 	echoTracker *outgoingEchoTracker
+	// origins 只记录请求和回显来源，不改变自动化确认或返回错误的语义。
+	origins *outgoingOriginTracker
 	// echoWaitTimeout 是测试可覆盖的回显确认预算；生产默认使用固定的有限等待时间。
 	echoWaitTimeout time.Duration
 }
@@ -46,6 +48,8 @@ func (c *outgoingMessageCoordinator) sendText(ctx context.Context, chatID, toUse
 	defer cancel()
 	// requestID 是本次平台请求的 mid；自动化回显确认必须沿发送上下文复用它。
 	requestID := protocol.GenerateMid()
+	c.origins.register(requestID, OutgoingChatMessage{Origin: outgoingOrigin(ctx), ChatID: chatID, Text: text, MessageKey: outgoingMessageKey(ctx)})
+	sendCtx = ws.WithOutgoingRequestID(sendCtx, requestID)
 	// echoWaiter 必须在平台写入前登记，防止闲鱼回显先到而错过确认窗口。
 	echoWaiter := c.registerOutgoingEcho(ctx, chatID, toUserID, "text", text, requestID)
 	if echoWaiter != nil {
@@ -56,6 +60,7 @@ func (c *outgoingMessageCoordinator) sendText(ctx context.Context, chatID, toUse
 		// classified 保存按平台结果分类后的发送错误，供回显保护策略判断。
 		classified := classifyPlatformSendError(err)
 		if errors.Is(classified, automation.ErrMessageNotSent) {
+			c.origins.forget(requestID)
 			echoWaiter.cancelWithoutLateProtection()
 		} else {
 			echoWaiter.cancel()
@@ -72,6 +77,7 @@ func (c *outgoingMessageCoordinator) sendText(ctx context.Context, chatID, toUse
 		key, _ := ctx.Value(outgoingMessageKeyContextKey{}).(string)
 		// err 是旁路持久化或广播失败原因，仅记录脱敏告警。
 		if err := observer.HandleOutgoingChatMessage(ctx, OutgoingChatMessage{
+			Origin: outgoingOrigin(ctx), TakeoverKey: key, SentAt: time.Now().UnixMilli(),
 			AccountID: a.CookieID, ChatID: chatID, BuyerID: toUserID, Text: text, MessageKey: key, ObservedAt: time.Now().UTC().UnixMilli(),
 		}); err != nil {
 			a.logger.Warn("保存出站聊天旁路失败", "account", a.CookieID, "chat_id", chatID, "err", err)
@@ -105,6 +111,8 @@ func (c *outgoingMessageCoordinator) sendImage(ctx context.Context, chatID, toUs
 	defer cancel()
 	// requestID 是本次平台图片请求的 mid；自动化回显确认必须沿发送上下文复用它。
 	requestID := protocol.GenerateMid()
+	c.origins.register(requestID, OutgoingChatMessage{Origin: outgoingOrigin(ctx), ChatID: chatID, MessageType: "image", Content: imageURL, MessageKey: outgoingMessageKey(ctx)})
+	sendCtx = ws.WithOutgoingRequestID(sendCtx, requestID)
 	// echoWaiter 必须在图片写入前登记；图片回显使用平台返回的同类媒体正文进行匹配。
 	echoWaiter := c.registerOutgoingEcho(ctx, chatID, toUserID, "image", imageURL, requestID)
 	if echoWaiter != nil {
@@ -115,6 +123,7 @@ func (c *outgoingMessageCoordinator) sendImage(ctx context.Context, chatID, toUs
 		// classified 保存按平台结果分类后的图片发送错误，供回显保护策略判断。
 		classified := classifyPlatformSendError(err)
 		if errors.Is(classified, automation.ErrMessageNotSent) {
+			c.origins.forget(requestID)
 			echoWaiter.cancelWithoutLateProtection()
 		} else {
 			echoWaiter.cancel()
@@ -148,6 +157,7 @@ func (c *outgoingMessageCoordinator) observePlatformSendResponse(echo ws.Outgoin
 		Text:        echo.Text,
 		Content:     echo.Content,
 	}
+	c.origins.confirm(observed)
 	c.echoTracker.observePlatform(observed)
 }
 
@@ -194,8 +204,26 @@ func (c *outgoingMessageCoordinator) sendItemCard(ctx context.Context, chatID, t
 	// sendCtx 和 cancel 将单次卡片发送最长等待限制为八秒。
 	sendCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
+	// requestID 为人工商品卡片登记来源，推送不能以另一个 PNM 重复延长同次人工接管。
+	requestID := protocol.GenerateMid()
+	// observationContent 与平台商品卡片解析保持相同的字段顺序及金额规范。
+	observationContent, _ := json.Marshal(struct {
+		// ItemID、Title、ImageURL、Price 是卡片快照，不进入来源表，仅用于一次摘要计算。
+		ItemID string `json:"item_id"`
+		// Title 是商品标题。
+		Title string `json:"title"`
+		// ImageURL 是商品图片地址。
+		ImageURL string `json:"image_url"`
+		// Price 是归一后的单价。
+		Price string `json:"price"`
+	}{strings.TrimSpace(itemID), strings.TrimSpace(title), strings.TrimSpace(imageURL), strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(price), "¥"))})
+	c.origins.register(requestID, OutgoingChatMessage{Origin: outgoingOrigin(ctx), ChatID: chatID, MessageType: "item", Content: string(observationContent), MessageKey: outgoingMessageKey(ctx)})
+	sendCtx = ws.WithOutgoingRequestID(sendCtx, requestID)
 	// sendErr 表示底层 WebSocket 商品卡片投递是否失败。
 	if sendErr := itemSender.SendItemCard(sendCtx, myID, chatID, toUserID, itemID, title, imageURL, price); sendErr != nil {
+		if errors.Is(classifyPlatformSendError(sendErr), automation.ErrMessageNotSent) {
+			c.origins.forget(requestID)
+		}
 		return classifyPlatformSendError(sendErr)
 	}
 	// contentBytes 是与本地 item 消息格式一致的规范出站正文。

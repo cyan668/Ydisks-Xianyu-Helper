@@ -78,6 +78,8 @@ type Adapter struct {
 	captchaReq     tokenCaptchaRequester
 	orderMTop      orderDetailClient
 	chat           *chat.Service
+	// takeover 是生产构造时固定的聊天接管用例，不在运行中注入或替换。
+	takeover *chatapp.Service
 	// initialOrderSync 在账号运行实例首次 WebSocket 注册成功后执行一次订单同步；仅在进程组合期注入，运行中不可替换。
 	initialOrderSync func(context.Context, string) error
 
@@ -181,6 +183,7 @@ func NewRuntimeBundle(store *db.Store, bm *browser.Manager, logger *slog.Logger,
 	})
 	// chatApplication 是人工消息页面和自动回复共用的聊天应用服务。
 	chatApplication := NewChatSendingApplication(chatService, store, manager, func() mtop.Client { return mtop.NewClient() })
+	runtimeAdapter.takeover = chatApplication
 	replyDelivery = NewChatReplyDelivery(chatApplication)
 	// notifier 是自动化与账号告警共用的通知出口，构造完成后不可替换。
 	notifier := notify.New("", store, logger)

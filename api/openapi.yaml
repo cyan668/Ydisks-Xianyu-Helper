@@ -6,6 +6,87 @@ info:
 servers:
   - url: /
 paths:
+  /api/v1/chat/reply-protection:
+    get:
+      operationId: getReplyProtection
+      summary: 读取账号人工接管回复时长
+      security: [{cookieAuth: []}]
+      parameters:
+        - {name: account_id, in: query, required: true, schema: {type: string}}
+      responses:
+        '200': {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ReplyProtection'}}}}
+        '400': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '401': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '403': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '404': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '409': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '500': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '503': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    put:
+      operationId: saveReplyProtection
+      summary: 保存人工接管分钟数，不立即暂停或启用账号
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_id, manual_pause_minutes]
+              properties:
+                account_id: {type: string}
+                manual_pause_minutes: {type: integer, minimum: 0, maximum: 1440}
+      responses:
+        '200': {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ReplyProtection'}}}}
+        '400': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '401': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '403': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '404': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '409': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '500': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '503': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+  /api/v1/chat/reply-pause:
+    get:
+      operationId: getConversationReplyPause
+      summary: 读取本人会话的人工接管状态
+      security: [{cookieAuth: []}]
+      parameters:
+        - {name: account_id, in: query, required: true, schema: {type: string}}
+        - {name: chat_id, in: query, required: true, schema: {type: string}}
+      responses:
+        '200': {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ReplyPauseState'}}}}
+        '400': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '401': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '403': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '404': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '409': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '500': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '503': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+  /api/v1/chat/reply-pause/resume:
+    post:
+      operationId: resumeConversationReply
+      summary: 以明确的旧状态版本恢复会话回复
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_id, chat_id, expected_version]
+              properties:
+                account_id: {type: string}
+                chat_id: {type: string}
+                expected_version: {type: integer, minimum: 0}
+      responses:
+        '200': {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ReplyPauseState'}}}}
+        '400': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '401': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '403': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '404': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '409': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '500': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+        '503': {description: 统一错误响应, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
   /api/v1/buyer-blocks/page:
     get:
       operationId: pageBuyerBlocks
@@ -10214,6 +10295,18 @@ components:
           - type: string
           - type: number
           - type: boolean
+    ReplyProtection:
+      type: object
+      required: [manual_pause_minutes]
+      properties:
+        manual_pause_minutes: {type: integer, minimum: 0, maximum: 1440}
+    ReplyPauseState:
+      type: object
+      required: [version, paused_until, paused]
+      properties:
+        version: {type: integer, minimum: 0}
+        paused_until: {type: integer, description: 人工接管截止的 Unix 毫秒}
+        paused: {type: boolean}
     ChatSession:
       type: object
       required: [account_id, chat_id, peer_user_id, peer_name, account_role, buyer_user_id, seller_user_id, role_item_id, role_source, last_message, last_message_at, unread_count]

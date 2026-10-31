@@ -164,6 +164,12 @@ type ChatMessage struct {
 // OutgoingChatMessage 是账号 WebSocket 接受或回显的一条非敏感出站消息摘要。
 // 它同时供自动化回显确认和聊天历史旁路落库使用；持久化错误不能改写已经由发送层判定的外部结果。
 type OutgoingChatMessage struct {
+	// Origin 是显式本地来源或来源记录器已核验的跨端来源；空值不能当作人工。
+	Origin OutgoingOrigin
+	// TakeoverKey 关联本地人工消息与平台 PNM，避免同次消息的回显重复延长暂停。
+	TakeoverKey string
+	// SentAt 是跨端消息的实际 Unix 毫秒时间，缺失时不据此开始接管。
+	SentAt    int64
 	AccountID string
 	ChatID    string
 	BuyerID   string
@@ -374,6 +380,8 @@ func New(cfg Config) *Account {
 	}
 	// echoTracker 保存当前账号自动化出站消息的回显等待项；其生命周期与账号 facade 一致。
 	echoTracker := newOutgoingEchoTracker()
+	// origins 独立记录本地请求与同步推送的来源，生命周期与当前账号实例相同。
+	origins := newOutgoingOriginTracker()
 	if cfg.Store != nil {
 		// aiReplier 保存当前账号的 AI 回复生成能力。
 		aiReplier := NewAIReplier(cfg.CookieID, cfg.Store, logger)
@@ -382,19 +390,20 @@ func New(cfg Config) *Account {
 		}
 	}
 	a.messageDispatcher = newMessageDispatcher(messageDispatcherConfig{
-		CookieID:        cfg.CookieID,
-		CurrentCookie:   a.currentCookieStr,
-		CurrentHandler:  func() Handler { return a.handler },
-		ObserveOutgoing: echoTracker.observeMessage,
-		Reply:           a.reply,
-		Logger:          logger,
-		BeginTask:       a.lifecycle.beginTask,
-		RecordMessage:   a.recordMessageReceived,
+		CookieID:         cfg.CookieID,
+		CurrentCookie:    a.currentCookieStr,
+		CurrentHandler:   func() Handler { return a.handler },
+		ObserveOutgoing:  echoTracker.observeMessage,
+		ClassifyOutgoing: origins.classify,
+		Reply:            a.reply,
+		Logger:           logger,
+		BeginTask:        a.lifecycle.beginTask,
+		RecordMessage:    a.recordMessageReceived,
 	})
 	// connection 保存绑定当前账号 facade 的连接编排组件；它只在构造完成后才可被 Run 调用。
 	a.connection = connectionCoordinator{account: a}
 	// outgoing 保存绑定当前账号 facade 的出站消息协调器；它只读取连接快照后执行外部 I/O。
-	a.outgoing = outgoingMessageCoordinator{account: a, echoTracker: echoTracker}
+	a.outgoing = outgoingMessageCoordinator{account: a, echoTracker: echoTracker, origins: origins}
 	// credentials 保存绑定当前账号 facade 的凭证协调器；外部凭证 I/O 均由它控制锁边界。
 	a.credentials = credentialCoordinator{account: a}
 	return a

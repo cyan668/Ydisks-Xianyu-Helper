@@ -1,4 +1,5 @@
 import { OfficialBlacklist } from '../components/OfficialBlacklist';
+import { ConversationPause } from '../components/ConversationPause';
 import {
 AlertCircle,Check,CheckCheck,ImagePlus,Loader2,MessageCircleMore,PackageSearch,PanelRightClose,PanelRightOpen,
 RefreshCw,Search,Send,Smile,UserRound,Wifi,WifiOff,X,
@@ -160,7 +161,7 @@ const Chat: React.FC = () => {
                     {activeAccount?.runtime_state === 'online' ? '账号在线' : '账号离线'}
                   </span>
                 </div>
-                <div className="flex shrink-0 justify-end border-b border-slate-100 bg-white px-4 py-2"><OfficialBlacklist key={activeAccountID + ':' + selectedSession.chat_id} accountID={activeAccountID} chatID={selectedSession.chat_id} /></div>
+                <div className="flex shrink-0 flex-wrap justify-end gap-2 border-b border-slate-100 bg-white px-4 py-2"><ConversationPause key={'pause:' + activeAccountID + ':' + selectedSession.chat_id} accountID={activeAccountID} chatID={selectedSession.chat_id} /><OfficialBlacklist key={activeAccountID + ':' + selectedSession.chat_id} accountID={activeAccountID} chatID={selectedSession.chat_id} /></div>
                 <div ref={scrollRef} onScroll={handleMessageScroll} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
                   {messagesLoading ? <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-sky-500" /></div> : <>
                     {hasOlder && <div className="flex justify-center pb-1">

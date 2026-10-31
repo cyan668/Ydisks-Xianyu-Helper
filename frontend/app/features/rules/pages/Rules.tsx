@@ -30,6 +30,7 @@ import DeliveryQuantityEditor from '../components/DeliveryQuantityEditor';
 import ReplyRuleEditor from '../components/ReplyRuleEditor';
 import ItemGreetingPanel from '../components/ItemGreetingPanel';
 import BuyerBlockPanel from '../components/BuyerBlockPanel';
+import ReplyProtectionPanel from '../components/ReplyProtectionPanel';
 import SearchableSelect from '../../../../shared/ui/SearchableSelect';
 import { useRulesData } from '../hooks';
 import { filterAutomationIssues } from '../issueState';
@@ -251,7 +252,7 @@ const Rules: React.FC<RulesProps> = ({ initialDeliveryTarget, onDeliveryTargetHa
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             刷新
           </button>
-          {activeTab !== 'greeting' && activeTab !== 'logs' && activeTab !== 'blocks' && (
+          {activeTab !== 'greeting' && activeTab !== 'logs' && activeTab !== 'blocks' && activeTab !== 'protection' && (
           <button
             onClick={activeTab === 'automation' ? /* 当前回调处理用户交互或异步状态变化。 */ () => openNewAutomationRule('order_paid') : activeTab === 'reply' ? handleAddReplyRule : /* 当前回调处理用户交互或异步状态变化。 */ () => void openDefaultReplyModal()}
             disabled={!selectedAccountId}
@@ -271,6 +272,7 @@ const Rules: React.FC<RulesProps> = ({ initialDeliveryTarget, onDeliveryTargetHa
           { id: 'default' as const, label: '账号默认回复', icon: Bot },
           { id: 'greeting' as const, label: '商品首次回复', icon: Gift },
           { id: 'blocks' as const, label: '买家黑名单', icon: SlidersHorizontal },
+          { id: 'protection' as const, label: '回复保护', icon: Clock3 },
           { id: 'logs' as const, label: '规则日志', icon: ScrollText },
         ].map(/* 当前回调处理用户交互或异步状态变化。 */ tab => {
           // Icon 渲染Icon React 组件。
@@ -291,6 +293,7 @@ const Rules: React.FC<RulesProps> = ({ initialDeliveryTarget, onDeliveryTargetHa
           );
         })}
       </div>
+      {activeTab === 'protection' && <ReplyProtectionPanel key={selectedAccountId} accountID={selectedAccountId} />}
 
 	  {activeTab === 'automation' && (visibleAutomationIssues.runs.length > 0 || visibleAutomationIssues.pending_tasks.length > 0) ? (
 	    <AutomationIssuePanel

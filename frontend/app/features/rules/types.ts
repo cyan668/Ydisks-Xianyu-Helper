@@ -28,7 +28,7 @@ ShippingVariant
 } from './api';
 
 // RulesTab 表示规则页的交易、客服、黑名单与审计页签。
-export type RulesTab = 'automation' | 'reply' | 'default' | 'greeting' | 'blocks' | 'logs';
+export type RulesTab = 'automation' | 'reply' | 'default' | 'greeting' | 'blocks' | 'protection' | 'logs';
 
 // RulesProps 描述规则页面从父级接收的联动参数。
 export interface RulesProps {
