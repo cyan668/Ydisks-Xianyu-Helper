@@ -17,7 +17,8 @@ MutationIDResponse,OperationResponse,
 PaginatedResponse,
 ReplyRule,
 ReplyMatchType,
-ShippingRule
+ShippingRule,
+ShippingVariant
 } from './models';
 import { type RequestControlOptions } from '../../../shared/http/client';
 import { contractClient, runContractRequest } from '../../../shared/api-contract/client';
@@ -25,6 +26,7 @@ import type { AutomationAuditEventListTransport,AutomationAuditEventTransport } 
 import { collectionFrom,objectFrom } from '../../../shared/http/contract';
 export type * from './models';
 import type { AuditDeliveredCard,AutomationAuditEvent,AutomationAuditPage,AutomationAuditQuery } from './auditModels';
+import { actionConfig, quantityModeFromConfig } from './quantityMode';
 
 /** 发货模板创建和更新请求体。 */
 interface DeliveryTemplateWritePayload {
@@ -220,7 +222,16 @@ const normalizeShippingRules = (rules: any[]): ShippingRule[] => rules.map(/* �
           .map(/* 当前回调用于处理集合元素或接口响应。 */ (action: any) => {
             // cfg 动作配置，用于当前 API 处理流程。
             let cfg: any = {};
-            try { cfg = JSON.parse(action.config_json || '{}'); } catch {}
+            // quantityMode 和 quantityModeError 隔离单条坏配置，不让历史异常阻断整页规则读取。
+            let quantityMode: ShippingVariant['quantity_mode'];
+            // quantityModeError 只提示当前异常动作，未修复时保存仍由严格解析拒绝。
+            let quantityModeError: string | undefined;
+            try {
+              cfg = actionConfig(action.config_json);
+              quantityMode = quantityModeFromConfig(action.config_json);
+            } catch {
+              quantityModeError = '原发货配置无效，请重新选择数量策略；配置 JSON 损坏时需修复或重建此发货内容。';
+            }
             return {
               id: action.id ? String(action.id) : undefined,
               spec_name: cfg.spec_name || '',
@@ -228,6 +239,8 @@ const normalizeShippingRules = (rules: any[]): ShippingRule[] => rules.map(/* �
               card_id: Number(action.card_id || 0),
               card_name: action.card_name || '',
               delivery_count: Number(action.delivery_count || 1),
+              quantity_mode: quantityMode,
+              quantity_mode_error: quantityModeError,
               enabled: action.enabled !== false,
               delay_override: cfg.delay_override === true,
               delay_seconds: Number(action.delay_seconds || 0),
@@ -337,6 +350,8 @@ export const updateShippingRule = async (rule: Partial<ShippingRule>): Promise<O
             delay_seconds: variant.delay_seconds || 0,
             custom_variables: variant.custom_variables || {},
             config_json: JSON.stringify({
+              ...actionConfig(variant.config_json),
+              quantity_mode: variant.quantity_mode ?? quantityModeFromConfig(variant.config_json),
               spec_name: variant.spec_name || '',
               spec_value: variant.spec_value || '',
               delay_override: variant.delay_override === true,

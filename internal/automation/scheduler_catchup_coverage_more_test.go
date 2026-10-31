@@ -898,6 +898,8 @@ func TestPendingShipObservationResetsAfterOrderLeavesCandidates(t *testing.T) {
 	// observation 是订单当前的观测记录。
 	observation := scheduler.pendingShipObserved["reset-order"]
 	observation.first = time.Now().UTC().Add(-time.Hour)
+	// 同步回拨最后观测，明确属于上一轮；Windows 连续调用时钟可能返回同一刻度。
+	observation.last = observation.first
 	scheduler.pendingShipObserved["reset-order"] = observation
 	scheduler.pendingShipMu.Unlock()
 	// 订单进入退款：本轮完整扫描没有候选，观测记录被清除。
