@@ -66,6 +66,9 @@ jobs:
       - name: 检查出站消息来源并发隔离
         run: go test -race ./internal/engine -run 'TestOutgoingOrigin' -count=1
 
+      - name: 检查相同内容回复领取并发隔离
+        run: go test -race ./internal/db ./internal/engine -run 'TestMultiDB_ReplyContentConcurrent|TestReplyContentCooldownExactTextAndConcurrency' -count=1
+
   smoke:
     name: 冒烟测试
     runs-on: ubuntu-24.04

@@ -6,6 +6,72 @@ info:
 servers:
   - url: /
 paths:
+  /api/v1/chat/content-cooldown:
+    get:
+      operationId: getContentCooldown
+      summary: 读取相同买家消息的独立冷却秒数
+      security: [{cookieAuth: []}]
+      parameters:
+        - {name: account_id, in: query, required: true, schema: {type: string}}
+      responses:
+        '200': {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ContentCooldownSettings'}}}}
+        '400': {$ref: '#/components/responses/ContentCooldownError'}
+        '401': {$ref: '#/components/responses/ContentCooldownError'}
+        '403': {$ref: '#/components/responses/ContentCooldownError'}
+        '500': {$ref: '#/components/responses/ContentCooldownError'}
+        '503': {$ref: '#/components/responses/ContentCooldownError'}
+    put:
+      operationId: saveContentCooldown
+      summary: 保存冷却秒数，零关闭新冷却但保留未知结果保护
+      security: [{cookieAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ContentCooldownWrite'}
+      responses:
+        '200': {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ContentCooldownSettings'}}}}
+        '400': {$ref: '#/components/responses/ContentCooldownError'}
+        '401': {$ref: '#/components/responses/ContentCooldownError'}
+        '403': {$ref: '#/components/responses/ContentCooldownError'}
+        '500': {$ref: '#/components/responses/ContentCooldownError'}
+        '503': {$ref: '#/components/responses/ContentCooldownError'}
+  /api/v1/chat/content-cooldown/reviews:
+    get:
+      operationId: listContentCooldownReviews
+      summary: 分页读取本人账号未知发送结果的重复消息保护
+      security: [{cookieAuth: []}]
+      parameters:
+        - {name: account_id, in: query, required: true, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        '200': {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ContentCooldownReviewPage'}}}}
+        '400': {$ref: '#/components/responses/ContentCooldownError'}
+        '401': {$ref: '#/components/responses/ContentCooldownError'}
+        '403': {$ref: '#/components/responses/ContentCooldownError'}
+        '500': {$ref: '#/components/responses/ContentCooldownError'}
+        '503': {$ref: '#/components/responses/ContentCooldownError'}
+  /api/v1/chat/content-cooldown/reviews/{claim_id}/resolve:
+    post:
+      operationId: resolveContentCooldownReview
+      summary: 用户核对平台后按版本解除未知保护，不补发旧消息
+      security: [{cookieAuth: []}]
+      parameters:
+        - {name: claim_id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ContentCooldownResolve'}
+      responses:
+        '200': {description: 成功, content: {application/json: {schema: {$ref: '#/components/schemas/ContentCooldownResolved'}}}}
+        '400': {$ref: '#/components/responses/ContentCooldownError'}
+        '401': {$ref: '#/components/responses/ContentCooldownError'}
+        '403': {$ref: '#/components/responses/ContentCooldownError'}
+        '409': {$ref: '#/components/responses/ContentCooldownError'}
+        '500': {$ref: '#/components/responses/ContentCooldownError'}
+        '503': {$ref: '#/components/responses/ContentCooldownError'}
   /api/v1/chat/reply-protection:
     get:
       operationId: getReplyProtection
@@ -8894,12 +8960,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthDegradedResponse'
 components:
+  responses:
+    ContentCooldownError:
+      description: 统一错误响应
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
   securitySchemes:
     cookieAuth:
       type: apiKey
       in: cookie
       name: session
   schemas:
+    ContentCooldownSettings:
+      type: object
+      required: [seconds]
+      properties:
+        seconds: {type: integer, minimum: 0, maximum: 86400}
+    ContentCooldownWrite:
+      type: object
+      required: [account_id, seconds]
+      properties:
+        account_id: {type: string}
+        seconds: {type: integer, minimum: 0, maximum: 86400}
+    ContentCooldownReview:
+      type: object
+      required: [id, version, chat_id, message_key, claimed_at]
+      properties:
+        id: {type: integer, minimum: 1}
+        version: {type: integer, minimum: 1}
+        chat_id: {type: string}
+        message_key: {type: string}
+        claimed_at: {type: integer, description: 本地接纳消息的 Unix 毫秒}
+    ContentCooldownReviewPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/ContentCooldownReview'}}
+        total: {type: integer, minimum: 0}
+        limit: {type: integer, minimum: 1, maximum: 100}
+        offset: {type: integer, minimum: 0}
+    ContentCooldownResolve:
+      type: object
+      required: [account_id, expected_version, confirmed]
+      properties:
+        account_id: {type: string}
+        expected_version: {type: integer, minimum: 1}
+        confirmed: {type: boolean, const: true}
+    ContentCooldownResolved:
+      type: object
+      required: [resolved]
+      properties:
+        resolved: {type: boolean, const: true}
     BuyerBlockPageResponse:
       type: object
       required: [data,total,page,page_size]

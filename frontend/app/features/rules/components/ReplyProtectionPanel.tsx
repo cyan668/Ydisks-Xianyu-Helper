@@ -1,10 +1,11 @@
 import { useReplyProtection } from '../replyProtection';
+import ContentCooldownPanel from './ContentCooldownPanel';
 
-/** ReplyProtectionPanel 展示独立会话接管设置，沿用规则页已有字号与间距。 */
+/** ReplyProtectionPanel 展示彼此独立的接管与内容冷却设置，沿用规则页已有字号与间距。 */
 export default function ReplyProtectionPanel({ accountID }: { /** accountID 为规则页选中的账号，空值不批量修改。 */ accountID: string }) {
   // protection 拥有本账号配置和取消责任。
   const protection = useReplyProtection(accountID);
-  return <section className="rounded-xl border border-gray-100 bg-white p-6">
+  return <div className="space-y-6"><section className="rounded-xl border border-gray-100 bg-white p-6">
     <h2 className="text-lg font-bold text-gray-900">人工接管暂停</h2>
     <p className="mt-2 text-sm leading-6 text-gray-600">人工发送文字、图片或商品卡片后，暂停该会话的自动客服回复。其他会话和订单自动发货继续按原规则处理。</p>
     {!accountID ? <p className="mt-6 text-sm text-gray-500">请先选择一个账号。</p> : <form className="mt-6 max-w-xl space-y-4" onSubmit={/* event 只提交当前账号配置。 */ event => { event.preventDefault(); void protection.save(); }}>
@@ -16,5 +17,5 @@ export default function ReplyProtectionPanel({ accountID }: { /** accountID 为�
       {!protection.loading && !protection.ready && <button type="button" className="ml-3 text-sm text-gray-600 underline" onClick={protection.reload}>重试读取</button>}
       {protection.message && <p role={protection.failed ? 'alert' : 'status'} className={`text-sm ${protection.failed ? 'text-red-600' : 'text-emerald-700'}`}>{protection.message}</p>}
     </form>}
-  </section>;
+  </section><ContentCooldownPanel accountID={accountID} /></div>;
 }

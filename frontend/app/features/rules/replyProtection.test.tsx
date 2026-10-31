@@ -6,6 +6,7 @@ import ReplyProtectionPanel from './components/ReplyProtectionPanel';
 import { useReplyProtection } from './replyProtection';
 
 vi.mock('./api', /* 仅替换本地配置接口，不连接平台。 */ () => ({ getReplyProtection: vi.fn(), saveReplyProtection: vi.fn() }));
+vi.mock('./components/ContentCooldownPanel', /* 独立内容冷却由自己的页面与 Hook 行为测试覆盖。 */ () => ({ default: /* 本测试只聚焦人工接管设置。 */ () => null }));
 beforeEach(/* 重置配置读写替身。 */ () => { vi.resetAllMocks(); vi.mocked(getReplyProtection).mockResolvedValue({ manual_pause_minutes: 0 }); vi.mocked(saveReplyProtection).mockResolvedValue({ manual_pause_minutes: 10 }); });
 afterEach(/* 卸载时取消读写请求。 */ () => cleanup());
 

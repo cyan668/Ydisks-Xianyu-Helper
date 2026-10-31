@@ -134,9 +134,9 @@ func newReplyService(cookieID string, store *db.Store, delivery ReplyDelivery, a
 	return service
 }
 
-// Handle 收到一条聊天消息：先尝试商品首次回复，再按四级优先级回复。
-// 由 Account 在防抖后调用。返回是否产生了回复。
-func (r *ReplyService) Handle(ctx context.Context, m ChatMessage) error {
+// Handle 由 Account 在防抖后处理 m；ctx 控制生成与发送，先核验会话保护，再尝试首次回复和四级回复。
+// replyErr 返回生成、投递或持久化故障；成功、无匹配和被保护跳过均返回 nil。
+func (r *ReplyService) Handle(ctx context.Context, m ChatMessage) (replyErr error) {
 	if m.ObservedAt <= 0 {
 		m.ObservedAt = time.Now().UnixMilli()
 	}
@@ -149,8 +149,30 @@ func (r *ReplyService) Handle(ctx context.Context, m ChatMessage) error {
 		r.logger.DebugContext(ctx, "人工接管期间跳过自动回复", "chat_id", m.ChatID)
 		return nil
 	}
+	// nextCtx、allowed、claimErr 为此会话入站正文领取冷却处理权，先于任何生成或首次回复。
+	nextCtx, allowed, claimErr := r.claimReplyContent(ctx, m)
+	if claimErr != nil {
+		return claimErr
+	}
+	if !allowed {
+		r.logger.DebugContext(ctx, "相同买家消息处于冷却、在途或人工核对保护，跳过自动回复")
+		return nil
+	}
+	ctx = nextCtx
+	defer func() { // 收口当前内容领取；只有本地持久化结果，不能在此重发消息。
+		// finishErr 保留收口故障，不把已发生的发送误称为无回复。
+		if finishErr := r.finishReplyContent(ctx); finishErr != nil {
+			replyErr = errors.Join(replyErr, finishErr)
+		}
+	}()
 	// 商品首次回复失败只记录日志，不得阻断买家本条消息的正常回复链路。
 	r.handleItemGreeting(ctx, m)
+	if err := r.checkReplyContentGeneration(ctx); err != nil { // err 仅阻止已失效、未知或无法核实的内容领取继续生成。
+		if errors.Is(err, db.ErrReplyContentClaimLost) {
+			return nil
+		}
+		return err
+	}
 	// res 用于本次流程后续判断的响应
 	res := r.resolve(ctx, m)
 	if res == nil {
@@ -165,7 +187,7 @@ func (r *ReplyService) Handle(ctx context.Context, m ChatMessage) error {
 	started := time.Now()
 	// err 是本次回复投递失败的原因，非空时不输出成功摘要。
 	if err := r.deliver(ctx, m, res); err != nil {
-		if errors.Is(err, ErrReplyTakeover) {
+		if errors.Is(err, ErrReplyTakeover) || errors.Is(err, db.ErrReplyContentClaimLost) {
 			return nil
 		}
 		return err
@@ -246,8 +268,9 @@ func (r *ReplyService) records(res *ReplyResult) onceRecordStore {
 	return r.store.DefaultReps
 }
 
-// handleWithDelivery 把完整回复交给聊天应用，并把其分段结果同步到 reply_once 状态。
-func (r *ReplyService) handleWithDelivery(ctx context.Context, m ChatMessage, res *ReplyResult, record db.DefaultReplyRecord) error {
+// handleWithDelivery 将 ctx 中领取的 m 对应 res 交给聊天应用，record 剔除已确认的分段。
+// replyErr 保留投递和本地结果保存失败，冷却与 reply_once 分别按真实分段事实收口。
+func (r *ReplyService) handleWithDelivery(ctx context.Context, m ChatMessage, res *ReplyResult, record db.DefaultReplyRecord) (replyErr error) {
 	// message 保存本次仍需发送的完整回复；已成功的 reply_once 分段会被剔除。
 	message := ReplyMessage{ObservedAt: m.ObservedAt, AccountID: r.cookieID, ChatID: m.ChatID, ToUserID: m.SenderUserID, Text: res.Text, ImageURL: res.ImageURL}
 	if record.ImageSent {
@@ -259,8 +282,18 @@ func (r *ReplyService) handleWithDelivery(ctx context.Context, m ChatMessage, re
 	if strings.TrimSpace(message.Text) == "" && strings.TrimSpace(message.ImageURL) == "" {
 		return nil
 	}
+	// claimErr 在任何外部副作用前持久化占用；失去代次时一次性任务尚未发送，可安全释放。
+	if claimErr := r.beginReplyContentDelivery(ctx); claimErr != nil {
+		return errors.Join(claimErr, r.markReplyFailure(ctx, res, m, claimErr))
+	}
 	// sent、sendErr 保存消息页面完整发送入口返回的分段确认和错误。
 	sent, sendErr := r.delivery.SendReply(ctx, message)
+	defer func() { // 只观察真实分段结果；写入失败会留下发送前占用，后续不得自动重放。
+		// persistErr 是内容冷却的本地结果持久化故障。
+		if persistErr := r.observeReplyContentDelivery(ctx, sent, sendErr); persistErr != nil {
+			replyErr = errors.Join(replyErr, persistErr)
+		}
+	}()
 	if sent.ImageSent && !record.ImageSent && res.ReplyOnce && m.ChatID != "" {
 		// markErr 保存图片分段状态持久化结果。
 		if markErr := r.records(res).MarkPartSent(ctx, r.cookieID, m.ChatID, "image"); markErr != nil {
