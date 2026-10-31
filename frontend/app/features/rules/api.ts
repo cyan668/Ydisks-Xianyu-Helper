@@ -30,6 +30,7 @@ import { collectionFrom,objectFrom } from '../../../shared/http/contract';
 export type * from './models';
 import type { AuditDeliveredCard,AutomationAuditEvent,AutomationAuditPage,AutomationAuditQuery } from './auditModels';
 import { actionConfig, quantityModeFromConfig } from './quantityMode';
+import type { ContentCooldownPage, ContentCooldownReview } from './contentCooldownModels';
 
 /** 发货模板创建和更新请求体。 */
 interface DeliveryTemplateWritePayload {
@@ -772,3 +773,29 @@ export const getReplyProtection = (accountID: string, options?: RequestControlOp
 
 /** saveReplyProtection 保存独立的人工接管分钟数，不触发账号启用或订单暂停。 */
 export const saveReplyProtection = (accountID: string, minutes: number, options?: RequestControlOptions) => runContractRequest(/* signal 取消反馈但不能撤回已提交配置。 */ signal => contractClient.PUT('/api/v1/chat/reply-protection', { body: { account_id: accountID, manual_pause_minutes: minutes }, signal }), options);
+
+/** getContentCooldown 将生成契约的设置转换为 UI 使用的秒数，不读取人工接管配置。 */
+export const getContentCooldown = async (accountID: string, options?: RequestControlOptions): Promise<number> => {
+  // settings 只在 adapter 内保留 transport 形状。
+  const settings = await runContractRequest(/* signal 控制本账号配置读取。 */ signal => contractClient.GET('/api/v1/chat/content-cooldown', { params: { query: { account_id: accountID } }, signal }), options);
+  return settings.seconds;
+};
+
+/** saveContentCooldown 保存独立秒数，返回服务端确认值，零不会解除未知结果。 */
+export const saveContentCooldown = async (accountID: string, seconds: number, options?: RequestControlOptions): Promise<number> => {
+  // settings 是本次明确配置提交后的 transport 回读。
+  const settings = await runContractRequest(/* signal 取消当前保存反馈。 */ signal => contractClient.PUT('/api/v1/chat/content-cooldown', { body: { account_id: accountID, seconds }, signal }), options);
+  return settings.seconds;
+};
+
+/** listContentCooldownReviews 把生成 transport 转换为页面模型，不读取正文或摘要键。 */
+export const listContentCooldownReviews = async (accountID: string, offset: number, options?: RequestControlOptions): Promise<ContentCooldownPage> => {
+  // page 是固定二十条的本地保护分页。
+  const page = await runContractRequest(/* signal 在翻页/切账号时取消旧读取。 */ signal => contractClient.GET('/api/v1/chat/content-cooldown/reviews', { params: { query: { account_id: accountID, limit: 20, offset } }, signal }), options);
+  return { total: page.total, limit: page.limit, offset: page.offset, items: page.items.map(/* item 转换定位字段，摘要和正文不进入 UI。 */ item => ({ id: item.id, version: item.version, chatID: item.chat_id, messageKey: item.message_key, claimedAt: item.claimed_at })) };
+};
+
+/** resolveContentCooldownReview 只提交用户已明确核对的状态，不重发消息或访问平台。 */
+export const resolveContentCooldownReview = async (accountID: string, review: ContentCooldownReview, options?: RequestControlOptions): Promise<void> => {
+  await runContractRequest(/* signal 控制解除请求反馈；服务器仍用版本比较防重复。 */ signal => contractClient.POST('/api/v1/chat/content-cooldown/reviews/{claim_id}/resolve', { params: { path: { claim_id: review.id } }, body: { account_id: accountID, expected_version: review.version, confirmed: true }, signal }), options);
+};

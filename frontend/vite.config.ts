@@ -105,6 +105,15 @@ export default defineConfig({
           ) {
             return 'rules-safety-controls';
           }
+          // 会话回复保护的配置与恢复只在该页签使用，独立分片保持规则主页面既有体积预算。
+          if (
+            modulePath.includes('/app/features/rules/components/ReplyProtectionPanel.') ||
+            modulePath.includes('/app/features/rules/components/ContentCooldownPanel.') ||
+            modulePath.includes('/app/features/rules/replyProtection.') ||
+            modulePath.includes('/app/features/rules/contentCooldown.')
+          ) {
+            return 'rules-reply-protection';
+          }
           // 关键词回复编辑器只在打开回复规则弹窗时使用，独立分片避免多表达式表单挤占规则主页面预算。
           if (modulePath.includes('/app/features/rules/components/ReplyRuleEditor.')) {
             return 'rules-reply-editor';

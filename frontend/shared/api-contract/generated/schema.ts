@@ -4,6 +4,58 @@
  */
 
 export interface paths {
+    "/api/v1/chat/content-cooldown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取相同买家消息的独立冷却秒数 */
+        get: operations["getContentCooldown"];
+        /** 保存冷却秒数，零关闭新冷却但保留未知结果保护 */
+        put: operations["saveContentCooldown"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/content-cooldown/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 分页读取本人账号未知发送结果的重复消息保护 */
+        get: operations["listContentCooldownReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/content-cooldown/reviews/{claim_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 用户核对平台后按版本解除未知保护，不补发旧消息 */
+        post: operations["resolveContentCooldownReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/reply-protection": {
         parameters: {
             query?: never;
@@ -2472,6 +2524,37 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ContentCooldownSettings: {
+            seconds: number;
+        };
+        ContentCooldownWrite: {
+            account_id: string;
+            seconds: number;
+        };
+        ContentCooldownReview: {
+            id: number;
+            version: number;
+            chat_id: string;
+            message_key: string;
+            /** @description 本地接纳消息的 Unix 毫秒 */
+            claimed_at: number;
+        };
+        ContentCooldownReviewPage: {
+            items: components["schemas"]["ContentCooldownReview"][];
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        ContentCooldownResolve: {
+            account_id: string;
+            expected_version: number;
+            /** @constant */
+            confirmed: true;
+        };
+        ContentCooldownResolved: {
+            /** @constant */
+            resolved: true;
+        };
         BuyerBlockPageResponse: {
             data: components["schemas"]["BuyerBlockResponse"][];
             total: number;
@@ -4121,7 +4204,17 @@ export interface components {
             [key: string]: unknown;
         };
     };
-    responses: never;
+    responses: {
+        /** @description 统一错误响应 */
+        ContentCooldownError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+    };
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -4129,6 +4222,123 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getContentCooldown: {
+        parameters: {
+            query: {
+                account_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentCooldownSettings"];
+                };
+            };
+            400: components["responses"]["ContentCooldownError"];
+            401: components["responses"]["ContentCooldownError"];
+            403: components["responses"]["ContentCooldownError"];
+            500: components["responses"]["ContentCooldownError"];
+            503: components["responses"]["ContentCooldownError"];
+        };
+    };
+    saveContentCooldown: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContentCooldownWrite"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentCooldownSettings"];
+                };
+            };
+            400: components["responses"]["ContentCooldownError"];
+            401: components["responses"]["ContentCooldownError"];
+            403: components["responses"]["ContentCooldownError"];
+            500: components["responses"]["ContentCooldownError"];
+            503: components["responses"]["ContentCooldownError"];
+        };
+    };
+    listContentCooldownReviews: {
+        parameters: {
+            query: {
+                account_id: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentCooldownReviewPage"];
+                };
+            };
+            400: components["responses"]["ContentCooldownError"];
+            401: components["responses"]["ContentCooldownError"];
+            403: components["responses"]["ContentCooldownError"];
+            500: components["responses"]["ContentCooldownError"];
+            503: components["responses"]["ContentCooldownError"];
+        };
+    };
+    resolveContentCooldownReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                claim_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContentCooldownResolve"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentCooldownResolved"];
+                };
+            };
+            400: components["responses"]["ContentCooldownError"];
+            401: components["responses"]["ContentCooldownError"];
+            403: components["responses"]["ContentCooldownError"];
+            409: components["responses"]["ContentCooldownError"];
+            500: components["responses"]["ContentCooldownError"];
+            503: components["responses"]["ContentCooldownError"];
+        };
+    };
     getReplyProtection: {
         parameters: {
             query: {

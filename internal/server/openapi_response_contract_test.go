@@ -65,6 +65,7 @@ func TestOpenAPISuccessContractCoverage(t *testing.T) {
 		{name: "buyer-blocks", run: TestBuyerBlockHandlersContract},
 		{name: "buyer-block-management", run: TestBuyerBlockManagementContract},
 		{name: "chat-reply-takeover", run: TestChatReplyTakeoverContract},
+		{name: "chat-content-cooldown", run: TestChatContentCooldownContract},
 		{name: "library", run: TestLibraryHandlersContract},
 		{name: "automation-audit-events", run: TestAutomationAuditEventsEndpoint},
 	}

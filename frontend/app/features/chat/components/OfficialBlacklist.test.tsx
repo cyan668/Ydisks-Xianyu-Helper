@@ -29,7 +29,7 @@ test('不自动查询，写平台前明确确认，结果不确定后只允许�
 
 test('切换会话取消旧查询并丢弃晚到的平台状态', /* 页面按账号及会话主键重建独立的状态机。 */ async () => {
   // resolve 控制旧查询何时返回。
-  let resolve!: (value: { blocked: boolean }) => void;
+  let resolve!: (value: { /** blocked 是旧会话查询到的平台拉黑状态，不能用于新会话。 */ blocked: boolean }) => void;
   vi.mocked(officialChatBlacklist).mockReturnValueOnce(new Promise(/* finish 捕获旧会话的完成能力。 */ finish => { resolve = finish; }));
   // view 模拟用户选择其他会话。
   const view = render(<OfficialBlacklist key="a" accountID="a" chatID="a" />);
