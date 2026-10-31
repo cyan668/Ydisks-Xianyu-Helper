@@ -2,9 +2,34 @@ package engine
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
+
+// TestOutgoingOriginsConcurrentResponses 验证并发同文发送仍由各自 mid/PNM 绑定来源，回显不能串到另一消息。
+func TestOutgoingOriginsConcurrentResponses(t *testing.T) {
+	// tracker 是所有发送回调共享的单账号状态。
+	tracker := newOutgoingOriginTracker()
+	// group 等待本测试启动的全部响应处理完成，不留下后台 goroutine。
+	var group sync.WaitGroup
+	for index := 0; index < 32; index++ { // index 是并发请求的非敏感序号。
+		group.Add(1)
+		go func(index int) { // index 为本 goroutine 独占的请求身份。
+			defer group.Done()
+			// requestID 为当前本地请求唯一 mid。
+			requestID := fmt.Sprintf("mid-%d", index)
+			tracker.register(requestID, OutgoingChatMessage{Origin: OutgoingAutomatic, ChatID: "chat", Text: "same fixture"})
+			// response 是经严格响应验证后到达的该请求平台消息。
+			response := OutgoingChatMessage{ChatID: "chat", Text: "same fixture", RequestID: requestID, MessageKey: fmt.Sprintf("pnm-%d", index), SentAt: tracker.startedAt + 1}
+			tracker.confirm(response)
+			if got := tracker.classify(response); got.Origin != OutgoingAutomatic { // got 必须属于本次精确响应，不能受其他并发请求影响。
+				t.Errorf("concurrent response %d lost automatic origin", index)
+			}
+		}(index)
+	}
+	group.Wait()
+}
 
 // TestOutgoingOriginCapacityKeepsAmbiguousMessagesUnknown 验证来源缓存有界，容量淘汰不会把自动回显猜测为新人工消息。
 func TestOutgoingOriginCapacityKeepsAmbiguousMessagesUnknown(t *testing.T) {
